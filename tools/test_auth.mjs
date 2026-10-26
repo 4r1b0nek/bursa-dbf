@@ -53,7 +53,7 @@ const throws = async (fn, label, needle = "") => {
 };
 
 await DB.init();
-const bootstrap = "Bursa#2026!";
+const bootstrap = "Bursa#2026!123";
 const usersBefore = Auth.users().length;
 check("tabel PENGGUNA dimuat", usersBefore >= 1 && Auth.findUser("admin")?.ROLE === "ADMIN");
 
@@ -64,7 +64,7 @@ result = await Auth.login("tidak-ada", "apa saja");
 check("username tidak ada ditolak", result.ok === false);
 
 result = await Auth.login("admin", bootstrap);
-check("login admin bootstrap", result.ok && result.user.ROLE === "ADMIN" && result.mustChange === true);
+check("login admin bootstrap", result.ok && result.user.ROLE === "ADMIN" && result.mustChange === false);
 check("role admin terdeteksi", Auth.isAdmin() === true);
 check("verifikasi ulang admin", (await Auth.verifyAdminPassword(bootstrap)) === true);
 

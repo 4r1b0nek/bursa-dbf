@@ -55,7 +55,7 @@ tidak memerlukan server, build step, atau basis data tambahan.
 
 Mode default memakai **API Cloudflare D1**. Password admin D1 dibuat saat setup dan
 **tidak disimpan di repositori**; buat akun user lewat **Pengguna → Tambah pengguna**.
-Password `Bursa#2026!` hanya berlaku untuk fallback DBF (`?mode=dbf`), yang memakai
+Password `Bursa#2026!123` hanya berlaku untuk fallback DBF (`?mode=dbf`), yang memakai
 akun bootstrap di [`tools/build_dbf.py`](tools/build_dbf.py).
 
 | Fitur | ADMIN | USER |

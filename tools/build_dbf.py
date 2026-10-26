@@ -33,7 +33,7 @@ DATA_DATE = "2026-10-21"
 
 BOOTSTRAP_USER = "admin"
 BOOTSTRAP_NAME = "Administrator"
-BOOTSTRAP_PASSWORD = "Bursa#2026!"
+BOOTSTRAP_PASSWORD = "Bursa#2026!123"
 PASSWORD_ITERATIONS = 100_000  # Cloudflare Workers Web Crypto membatasi PBKDF2 <= 100.000
 
 CATATAN = {
