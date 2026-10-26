@@ -27,10 +27,11 @@ tidak memerlukan server, build step, atau basis data tambahan.
 - **Ringkasan** — skor 9 emiten, margin of safety, dividend yield, peta valuasi (yield vs MoS),
   dan tesis singkat.
 - **Analisis saham** — tabel yang bisa dicari, difilter per sektor/rating, dan diurutkan.
-- **Update harga** — ubah harga terbaru 9 emiten; PE, PB, DY, dan MoS dihitung ulang otomatis,
-  lalu dapat diekspor kembali ke `.DBF`.
+- **Update harga** — ubah harga terbaru 9 emiten; PE, PB, DY, dan MoS dihitung ulang.
+  Mode D1 menyimpannya ke database; mode fallback DBF dapat diekspor kembali ke `.DBF`.
 - **Update otomatis** — GitHub Actions mengambil harga dari Yahoo Finance setiap hari kerja
-  pukul 17.15 WIB, memperbarui DBF, lalu men-deploy ulang halaman.
+  pukul 17.15 WIB dan memperbarui DBF fallback. Pada mode D1, gunakan **Update harga** di UI
+  (admin) sampai sinkronisasi otomatis D1 dikonfigurasi.
 - **Lembar analisis** — valuasi (DDM, PE/PB wajar), radar enam faktor, skenario bull/base/bear
   1–3–5 tahun, tren 10 minggu, indikator teknikal, riwayat dividen, dan level harga.
 - **Portofolio** — jurnal beli/jual, biaya rata-rata, laba/rugi unrealized & realisasi,
@@ -379,6 +380,9 @@ Transaksi portofolio dan akun pengguna dipertahankan; tambahkan `--reset-transak
 - Nilai wajar dan skenario adalah keluaran model dengan asumsi eksplisit — bukan saran
   beli/jual. Angka dapat berbeda bila asumsi COE, PE wajar, atau pertumbuhan diubah.
 - Teks DBF dibatasi ASCII/CP1252; karakter di luar itu akan disanitasi.
+- Repositori publik masih menyertakan `data/*.DBF` untuk fallback `?mode=dbf`. Aplikasi mode
+  D1 tidak memuat berkas itu, tetapi URL langsungnya tetap dapat diakses dari GitHub. Untuk
+  menyembunyikan total, hapus `data/` dari repo/artefak deploy atau jadikan repo privat.
 
 ## Sumber data
 
