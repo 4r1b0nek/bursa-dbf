@@ -5,6 +5,7 @@
 import * as DB from "./store.js";
 import * as C from "./charts.js";
 import * as Auth from "./auth.js";
+import * as API from "./api.js";
 import {
   esc, num, rupiah, compactRp, pct, pctRaw, signClass, dateID, bytes as fmtBytes,
   isNum, mean, clamp,
@@ -136,32 +137,35 @@ function emptyState(title, text, actionLabel, action) {
 
 /* ------------------------------------------------------------------ boot */
 async function boot() {
-  try {
-    await DB.init();
-  } catch (err) {
-    console.error(err);
-    mainEl().innerHTML = `<div class="card empty">
-      <div class="ic">${icon("alert")}</div>
-      <h3>Data DBF tidak dapat dimuat</h3>
-      <p>${esc(err.message || String(err))}</p>
-      <p class="small muted">Aplikasi ini membaca berkas <span class="mono">data/*.DBF</span> lewat HTTP.
-      Jalankan server statis (<span class="mono">python -m http.server</span>) atau buka lewat GitHub Pages —
-      membuka <span class="mono">index.html</span> langsung dari disk akan diblokir browser.</p>
-    </div>`;
-    return;
-  }
-  ui.sim = DB.simulationDefaults();
-  if (DB.state.autoRefreshed) {
-    toast("Data .DBF terbaru dimuat dari server · transaksi tetap dipertahankan");
-    DB.state.autoRefreshed = false;
-  }
   bindGlobal();
   window.addEventListener("hashchange", route);
   document.getElementById("foot-year").textContent = new Date().getFullYear();
+
+  if (!DB.apiMode) {
+    try {
+      await DB.init();
+    } catch (err) {
+      console.error(err);
+      mainEl().innerHTML = `<div class="card empty">
+        <div class="ic">${icon("alert")}</div>
+        <h3>Data DBF tidak dapat dimuat</h3>
+        <p>${esc(err.message || String(err))}</p>
+        <p class="small muted">Aplikasi ini membaca berkas <span class="mono">data/*.DBF</span> lewat HTTP.
+        Jalankan server statis (<span class="mono">python -m http.server</span>) atau buka lewat GitHub Pages —
+        membuka <span class="mono">index.html</span> langsung dari disk akan diblokir browser.</p>
+      </div>`;
+      return;
+    }
+    if (DB.state.autoRefreshed) {
+      toast("Data .DBF terbaru dimuat dari server · transaksi tetap dipertahankan");
+      DB.state.autoRefreshed = false;
+    }
+  }
+
   if (!Auth.currentUser()) {
     showLogin();
   } else {
-    startApp();
+    await startApp();
   }
   setInterval(() => {
     if (!Auth.currentUser() && !authRoot().childElementCount) {
@@ -202,8 +206,9 @@ function showLogin(message = "") {
           <button class="btn btn-primary" type="submit" id="login-submit">${icon("arrow")} Masuk</button>
         </form>
         <div class="auth-lock">${icon("shield")} Akses terbatas · hubungi admin jika akun kedaluwarsa</div>
-        <p class="auth-note">Aplikasi statis: login ini mengatur tampilan, bukan pengganti
-        autentikasi server. Jangan gunakan password penting.</p>
+        <p class="auth-note">${DB.apiMode
+          ? "Login diverifikasi oleh server Cloudflare D1. Token berlaku 8 jam dan tidak disimpan permanen."
+          : "Aplikasi statis: login ini mengatur tampilan, bukan pengganti autentikasi server. Jangan gunakan password penting."}</p>
       </div>
     </div>`;
   const form = document.getElementById("login-form");
@@ -221,7 +226,7 @@ function showLogin(message = "") {
         error.classList.add("show");
         return;
       }
-      startApp();
+      await startApp();
     } catch (err) {
       error.textContent = err.message || "Gagal login.";
       error.classList.add("show");
@@ -233,7 +238,7 @@ function showLogin(message = "") {
   setTimeout(() => document.getElementById("login-user")?.focus(), 50);
 }
 
-function startApp() {
+async function startApp() {
   const user = Auth.currentUser();
   if (!user) {
     showLogin("Sesi berakhir. Silakan login kembali.");
@@ -242,9 +247,23 @@ function startApp() {
   authRoot().innerHTML = "";
   document.body.classList.remove("auth-locked");
   applyRoleUI(user);
-  route();
+
   if (String(user.MUSTCHG).toUpperCase() === "Y") {
     openChangePasswordModal({ forced: true });
+    return;
+  }
+
+  try {
+    if (DB.apiMode) {
+      await DB.loadApi();
+      if (Auth.isAdmin()) await Auth.loadUsers();
+    }
+    ui.sim = DB.simulationDefaults();
+    route();
+  } catch (err) {
+    console.error(err);
+    Auth.logout();
+    showLogin(err.message || "Gagal memuat data dari server.");
   }
 }
 
@@ -261,9 +280,9 @@ function applyRoleUI(user) {
   const navDb = document.getElementById("nav-database");
   const navUsers = document.getElementById("nav-users");
   const download = document.getElementById("download-dbf");
-  if (navDb) navDb.hidden = !admin;
+  if (navDb) navDb.hidden = !admin || DB.apiMode;
   if (navUsers) navUsers.hidden = !admin;
-  if (download) download.hidden = !admin;
+  if (download) download.hidden = !admin || DB.apiMode;
 }
 
 function requireAdmin() {
@@ -303,6 +322,10 @@ function route() {
   const [viewRaw, paramRaw] = raw.split("/");
   const view = ["ringkasan", "saham", "portofolio", "simulasi", "database", "pengguna"].includes(viewRaw)
     ? viewRaw : "ringkasan";
+  if (view === "database" && DB.apiMode) {
+    location.hash = "#/ringkasan";
+    return;
+  }
   if ((view === "database" || view === "pengguna") && !Auth.isAdmin()) {
     toast("Halaman ini hanya untuk administrator.", "err");
     location.hash = "#/ringkasan";
@@ -357,11 +380,13 @@ function syncChrome() {
   if (!pill) return;
   const n = DB.state.order.length;
   pill.classList.toggle("dirty", DB.state.dirty);
-  pill.innerHTML = `<span class="dot"></span><span>${n} tabel DBF</span><span class="sep"></span>
-    <span class="full">${DB.state.dirty ? "belum diekspor" : DB.state.folderName ? "folder aktif" : "siap"}</span>`;
-  pill.title = DB.state.dirty
-    ? "Perubahan tersimpan di browser, belum ditulis ke berkas .DBF"
-    : "Data DBF tersinkron dengan tampilan";
+  pill.innerHTML = `<span class="dot"></span><span>${n} ${DB.apiMode ? "tabel D1" : "tabel DBF"}</span><span class="sep"></span>
+    <span class="full">${DB.apiMode ? "tersambung" : DB.state.dirty ? "belum diekspor" : DB.state.folderName ? "folder aktif" : "siap"}</span>`;
+  pill.title = DB.apiMode
+    ? "Data dibaca dari Cloudflare D1 melalui API"
+    : DB.state.dirty
+      ? "Perubahan tersimpan di browser, belum ditulis ke berkas .DBF"
+      : "Data DBF tersinkron dengan tampilan";
 }
 
 function refresh() {
@@ -402,9 +427,9 @@ function viewDashboard() {
   const stocks = DB.stockList();
   if (!stocks.length) {
     return `<div class="card empty">
-      <div class="ic">${icon("database")}</div><h3>Tabel SAHAM kosong</h3>
-      <p>Impor kembali <span class="mono">SAHAM.DBF</span> dari halaman Database.</p>
-      <a class="btn btn-primary" href="#/database">${icon("database")} Buka database</a></div>`;
+      <div class="ic">${icon("database")}</div><h3>Data saham kosong</h3>
+      <p>${DB.apiMode ? "Muat ulang halaman atau hubungi administrator." : `Impor kembali <span class="mono">SAHAM.DBF</span> dari halaman Database.`}</p>
+      ${DB.apiMode ? `<button class="btn btn-primary" data-action="reload-api">${icon("refresh")} Muat ulang</button>` : `<a class="btn btn-primary" href="#/database">${icon("database")} Buka database</a>`}</div>`;
   }
   const byScore = stocks.slice().sort((a, b) => b.SKOR - a.SKOR);
   const byMos = stocks.slice().sort((a, b) => b.MOS - a.MOS);
@@ -462,13 +487,15 @@ function viewDashboard() {
       <div class="eyebrow">Riset ekuitas · harga ${priceDate ? dateID(priceDate) : "—"}</div>
       <h1>Sembilan saham. <em>Satu database</em> yang bisa dibawa.</h1>
       <p class="lede">Dashboard analisis fundamental, valuasi, dividen, dan portofolio untuk sembilan emiten BEI.
-        Semua angka dibaca dari tabel <b>DBF</b> — format basis data yang bisa dibuka Excel, LibreOffice, atau Python.</p>
+        ${DB.apiMode
+          ? "Data dibaca dari <b>SQLite D1</b> melalui API terautentikasi — browser tidak menerima file database."
+          : "Semua angka dibaca dari tabel <b>DBF</b> — format basis data yang bisa dibuka Excel, LibreOffice, atau Python."}</p>
       <div class="hero-actions">
         <a class="btn btn-primary" href="#/saham">${icon("chart")} Lihat analisis</a>
-        ${Auth.isAdmin() ? `<a class="btn btn-ghost" href="#/database">${icon("database")} Struktur DBF</a>` : ""}
+        ${Auth.isAdmin() && !DB.apiMode ? `<a class="btn btn-ghost" href="#/database">${icon("database")} Struktur DBF</a>` : ""}
       </div>
       <div class="hero-meta">
-        <span>${icon("layers")} ${DB.state.order.length} tabel DBF</span>
+        <span>${icon("layers")} ${DB.state.order.length} ${DB.apiMode ? "tabel D1" : "tabel DBF"}</span>
         <span>${icon("briefcase")} ${stocks.length} emiten</span>
         <span>${icon("clock")} Harga per ${priceDate ? dateID(priceDate) : "—"}</span>
       </div>
@@ -585,7 +612,7 @@ function viewStocks() {
 
   return `
   ${sectionHead("Analisis saham", "Klik baris untuk membuka lembar analisis: valuasi, skenario, teknikal, dan dividen.",
-    `<span class="chip brand">${DB.state.order.length} tabel DBF</span>`)}
+    `<span class="chip brand">${DB.state.order.length} ${DB.apiMode ? "tabel D1" : "tabel DBF"}</span>`)}
   <div class="toolbar">
     <div class="search">${icon("search")}<input id="stock-search" type="search" placeholder="Cari kode, nama, sektor…" aria-label="Cari saham"></div>
     <select class="control" id="f-sector" aria-label="Filter sektor">
@@ -598,8 +625,8 @@ function viewStocks() {
     </select>
     <span class="count" id="stock-count">${list.length} dari ${stocks.length} emiten</span>
     <div class="grow"></div>
-    ${Auth.isAdmin() ? `<button class="btn btn-ghost btn-sm" data-action="price-editor">${icon("edit")} Update harga</button>
-    <button class="btn btn-ghost btn-sm" data-action="export-all">${icon("download")} Unduh DBF</button>` : ""}
+    ${Auth.isAdmin() ? `<button class="btn btn-ghost btn-sm" data-action="price-editor">${icon("edit")} Update harga</button>` : ""}
+    ${Auth.isAdmin() && !DB.apiMode ? `<button class="btn btn-ghost btn-sm" data-action="export-all">${icon("download")} Unduh DBF</button>` : ""}
   </div>
 
   <div class="card flush">
@@ -898,10 +925,12 @@ function viewPortfolio() {
     : `<tr><td colspan="9" class="muted center" style="padding:28px">Belum ada transaksi. Catat pembelian pertama Anda.</td></tr>`;
 
   return `
-  ${sectionHead("Portofolio", "Dihitung dari tabel TRANSAKSI.DBF dengan metode biaya rata-rata (1 lot = 100 lembar).",
+  ${sectionHead("Portofolio", DB.apiMode
+      ? "Dihitung dari jurnal transaksi Anda di D1 dengan metode biaya rata-rata (1 lot = 100 lembar)."
+      : "Dihitung dari tabel TRANSAKSI.DBF dengan metode biaya rata-rata (1 lot = 100 lembar).",
     `<div class="wrap-gap">
       <button class="btn btn-primary" data-action="tx-add">${icon("plus")} Tambah transaksi</button>
-      ${Auth.isAdmin() ? `<button class="btn btn-ghost" data-action="export-table" data-name="TRANSAKSI">${icon("download")} TRANSAKSI.DBF</button>` : ""}
+      ${Auth.isAdmin() && !DB.apiMode ? `<button class="btn btn-ghost" data-action="export-table" data-name="TRANSAKSI">${icon("download")} TRANSAKSI.DBF</button>` : ""}
     </div>`)}
   ${kpis}
   <section class="grid grid-2-1">
@@ -911,7 +940,7 @@ function viewPortfolio() {
 
   <section class="card flush section">
     <div class="card-head" style="padding:18px 20px 0">
-      <div><h3>Jurnal transaksi</h3><p>${p.transactions.length} baris tersimpan di TRANSAKSI.DBF${DB.state.dirty ? " · ada perubahan lokal" : ""}.</p></div>
+      <div><h3>Jurnal transaksi</h3><p>${p.transactions.length} baris tersimpan ${DB.apiMode ? "di D1" : "di TRANSAKSI.DBF"}${DB.state.dirty ? " · ada perubahan lokal" : ""}.</p></div>
       <button class="btn btn-ghost btn-sm" data-action="tx-clear">${icon("trash")} Hapus semua</button>
     </div>
     <div class="table-wrap mt-2">
@@ -925,11 +954,13 @@ function viewPortfolio() {
   </section>
 
   <div class="callout mt-3">${icon("database")}
-    <div><b>Penyimpanan.</b> Setiap perubahan langsung disimpan di penyimpanan browser agar tidak hilang saat dimuat ulang.
-    ${Auth.isAdmin()
-      ? `Agar berkas <span class="mono">TRANSAKSI.DBF</span> ikut berubah, gunakan <b>Unduh .DBF</b> atau
-         <a href="#/database">Simpan ke folder</a> di halaman Database.`
-      : "Hubungi administrator untuk menyimpan perubahan ini ke berkas DBF."}</div>
+    <div><b>Penyimpanan.</b> ${DB.apiMode
+      ? "Transaksi disimpan di Cloudflare D1 atas nama akun Anda dan langsung tersedia di perangkat lain."
+      : `Setiap perubahan langsung disimpan di penyimpanan browser agar tidak hilang saat dimuat ulang.
+         ${Auth.isAdmin()
+           ? `Agar berkas <span class="mono">TRANSAKSI.DBF</span> ikut berubah, gunakan <b>Unduh .DBF</b> atau
+              <a href="#/database">Simpan ke folder</a> di halaman Database.`
+           : "Hubungi administrator untuk menyimpan perubahan ini ke berkas DBF."}`}</div>
   </div>`;
 }
 
@@ -989,15 +1020,18 @@ function viewUsers() {
   return `
   ${sectionHead("Manajemen pengguna", "Kelola akun, role, status, dan masa berlaku. Hanya administrator yang dapat membuka halaman ini.",
     `<div class="wrap-gap">
-      <button class="btn btn-ghost" data-action="export-table" data-name="PENGGUNA">${icon("download")} PENGGUNA.DBF</button>
+      <button class="btn btn-ghost" data-action="export-table" data-name="PENGGUNA" ${DB.apiMode ? "hidden" : ""}>${icon("download")} PENGGUNA.DBF</button>
       <button class="btn btn-primary" data-action="user-add">${icon("plus")} Tambah pengguna</button>
     </div>`)}
 
-  <div class="auth-banner">${icon("alert")}
-    <div><b>Kontrol akses mode statis.</b> Aplikasi ini berjalan di GitHub Pages, sehingga role diperiksa di browser
-    dan berkas <span class="mono">PENGGUNA.DBF</span> dapat dibaca publik. Password disimpan sebagai hash PBKDF2 + salt,
-    tetapi ini bukan pengganti autentikasi server. Perubahan pengguna hanya tersimpan di browser sampai
-    <span class="mono">PENGGUNA.DBF</span> diekspor dan di-commit.</div>
+  <div class="auth-banner">${icon("shield")}
+    <div>${DB.apiMode
+      ? `<b>Autentikasi server D1.</b> Role, status, dan masa berlaku diperiksa oleh Worker;
+         browser tidak menerima hash password atau file database. Perubahan pengguna langsung tersimpan di D1.`
+      : `<b>Kontrol akses mode statis.</b> Aplikasi ini berjalan di GitHub Pages, sehingga role diperiksa di browser
+         dan berkas <span class="mono">PENGGUNA.DBF</span> dapat dibaca publik. Password disimpan sebagai hash PBKDF2 + salt,
+         tetapi ini bukan pengganti autentikasi server. Perubahan pengguna hanya tersimpan di browser sampai
+         <span class="mono">PENGGUNA.DBF</span> diekspor dan di-commit.`}</div>
   </div>
 
   <section class="grid grid-4 section">
@@ -1019,7 +1053,7 @@ function viewUsers() {
       </table>
     </div>
     <p class="footnote" style="padding:0 20px 16px">User biasa hanya dapat membuka Ringkasan, Saham, Portofolio, dan Simulasi.
-    Database, update harga, ekspor DBF, dan manajemen pengguna khusus admin.</p>
+    ${DB.apiMode ? "Update harga dan manajemen pengguna khusus admin." : "Database, update harga, ekspor DBF, dan manajemen pengguna khusus admin."}</p>
   </div>`;
 }
 
@@ -1067,7 +1101,7 @@ function viewSimulation() {
             <input id="sim-divgrowth" name="divGrowthPct" type="number" min="-10" max="20" step="0.5" value="${(sim.divGrowth * 100).toFixed(1)}">
           </div>
           <div class="field">
-            <label for="sim-source">Ambil yield dari DBF</label>
+            <label for="sim-source">Ambil yield dari ${DB.apiMode ? "data D1" : "DBF"}</label>
             <select id="sim-source" name="divYieldSource">
               <option value="avg">Rata-rata 9 emiten</option>
               ${stocks.map((s) => `<option value="${esc(s.KODE)}">${esc(s.KODE)} — ${pct(s.DY, 1)}</option>`).join("")}
@@ -1300,6 +1334,11 @@ async function onClick(e) {
     "user-add", "user-edit", "user-toggle",
   ]);
   if (adminOnly.has(action) && !requireAdmin()) return;
+  if (DB.apiMode && ["export-table", "export-all", "reload-reference", "save-folder",
+    "import", "select-table", "toggle-show-all", "reset-db"].includes(action)) {
+    toast("Fitur DBF tidak tersedia dalam mode D1.", "err");
+    return;
+  }
 
   if (action === "logout") {
     Auth.logout();
@@ -1365,16 +1404,47 @@ async function onClick(e) {
     const tx = DB.rows("TRANSAKSI")[index];
     if (!tx) return;
     if (!window.confirm(`Hapus transaksi ${tx.JENIS} ${tx.KODE} ${num(tx.LOT, 0)} lot?`)) return;
-    DB.deleteRow("TRANSAKSI", index);
+    if (DB.apiMode) {
+      try {
+        await API.deleteTransaction(tx.ID);
+        await DB.loadApi();
+      } catch (err) {
+        toast(err.message, "err");
+        return;
+      }
+    } else {
+      DB.deleteRow("TRANSAKSI", index);
+    }
     toast("Transaksi dihapus");
     refresh();
     return;
   }
   if (action === "tx-clear") {
-    if (!window.confirm("Hapus semua transaksi dari tabel TRANSAKSI?")) return;
-    DB.replaceRows("TRANSAKSI", []);
+    if (!window.confirm("Hapus semua transaksi portofolio Anda?")) return;
+    if (DB.apiMode) {
+      try {
+        await API.clearTransactions();
+        await DB.loadApi();
+      } catch (err) {
+        toast(err.message, "err");
+        return;
+      }
+    } else {
+      DB.replaceRows("TRANSAKSI", []);
+    }
     toast("Semua transaksi dihapus");
     refresh();
+    return;
+  }
+  if (action === "reload-api") {
+    try {
+      await DB.loadApi();
+      if (Auth.isAdmin()) await Auth.loadUsers();
+      toast("Data D1 dimuat ulang");
+      refresh();
+    } catch (err) {
+      toast(err.message, "err");
+    }
     return;
   }
   if (action === "export-table") {
@@ -1543,7 +1613,8 @@ function openChangePasswordModal({ forced = false } = {}) {
       toast("Password berhasil diperbarui");
       const refreshed = Auth.currentUser();
       if (refreshed) applyRoleUI(refreshed);
-      route();
+      if (forced) await startApp();
+      else route();
     } catch (err) {
       error.textContent = err.message;
       error.classList.add("show");
@@ -1624,7 +1695,7 @@ function openUserModal(id = null) {
   const title = existing ? "Ubah pengguna" : "Tambah pengguna";
   modalRoot().innerHTML = modalShell({
     title,
-    subtitle: existing ? `Akun ${esc(existing.USERNAME)} · perubahan dicatat di PENGGUNA.DBF.` : "Akun baru wajib mengganti password saat login pertama.",
+    subtitle: existing ? `Akun ${esc(existing.USERNAME)} · ${DB.apiMode ? "perubahan disimpan ke D1." : "perubahan dicatat di PENGGUNA.DBF."}` : "Akun baru wajib mengganti password saat login pertama.",
     width: "620px",
     id: "user-title",
     body: `
@@ -1725,8 +1796,9 @@ function openPriceModal() {
           </div>
           <div class="form-error" id="price-error"></div>
           <div class="callout mt-2">${icon("info")}
-            <div>Nilai wajar, skor, dan indikator teknikal tidak diubah. Setelah disimpan, unduh
-            <b>SAHAM.DBF</b> dan <b>VALUASI.DBF</b> (atau ZIP) agar perubahan ikut tersimpan ke berkas DBF.</div>
+            <div>${DB.apiMode
+              ? "Perubahan harga disimpan ke D1. PE, PB, DY, dan MoS dihitung ulang oleh server."
+              : "Nilai wajar, skor, dan indikator teknikal tidak diubah. Setelah disimpan, unduh <b>SAHAM.DBF</b> dan <b>VALUASI.DBF</b> (atau ZIP) agar perubahan ikut tersimpan ke berkas DBF."}</div>
           </div>
         </form>
         <div class="modal-foot">
@@ -1752,18 +1824,29 @@ function openPriceModal() {
     const digits = e.target.value.replace(/\D/g, "");
     e.target.value = digits ? num(Number(digits), 0) : "";
   });
-  form.addEventListener("submit", (ev) => {
+  form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const prices = {};
     form.querySelectorAll(".price-input").forEach((input) => {
       const value = Number(String(input.value).replace(/\D/g, ""));
       if (value > 0) prices[input.dataset.code] = value;
     });
-    const changed = DB.updatePrices(prices);
     const error = document.getElementById("price-error");
+    const submit = form.closest(".modal").querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    let changed;
+    try {
+      changed = await DB.updatePrices(prices);
+    } catch (err) {
+      error.textContent = err.message || "Gagal menyimpan harga.";
+      error.classList.add("show");
+      if (submit) submit.disabled = false;
+      return;
+    }
     if (!changed) {
       error.textContent = "Tidak ada harga yang berubah. Isi minimal satu harga baru.";
       error.classList.add("show");
+      if (submit) submit.disabled = false;
       return;
     }
     closeModal();
@@ -1893,6 +1976,20 @@ function saveTransaction(form, existing) {
     if (editingThisSell) available += Number(existing.LOT) || 0;
     if (available <= 0) return show(`Belum ada posisi ${kode} untuk dijual.`);
     if (lot > available) return show(`Lot jual (${lot}) melebihi posisi tersedia (${available} lot).`);
+  }
+
+  if (DB.apiMode) {
+    const payload = { tanggal, kode, jenis, lot, harga, fee, catatan };
+    const request = existing
+      ? API.updateTransaction(existing.ID, payload)
+      : API.createTransaction(payload);
+    request.then(async () => {
+      await DB.loadApi();
+      closeModal();
+      toast(existing ? "Transaksi diperbarui" : "Transaksi ditambahkan");
+      refresh();
+    }).catch((error) => show(error.message || "Gagal menyimpan transaksi."));
+    return true;
   }
 
   const row = {

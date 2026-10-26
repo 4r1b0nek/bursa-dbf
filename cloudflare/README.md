@@ -107,5 +107,5 @@ curl https://bursa-dbf-api.agus-asarry.workers.dev/api/bootstrap \
 
 - D1 free tier: 5 juta baris dibaca/hari, 100.000 baris ditulis/hari, 5 GB.
 - Worker free tier punya batas CPU; hashing password sebaiknya diuji sebelum produksi.
-- Frontend GitHub Pages saat ini **masih membaca DBF**. Untuk memakai D1, frontend
-  harus diubah memanggil endpoint di atas (langkah berikutnya).
+- Frontend GitHub Pages memakai API ini secara default (`store.js`, `auth.js`, transaksi,
+  pengguna, dan update harga). Tambahkan `?mode=dbf` untuk fallback ke DBF lokal.

@@ -52,17 +52,21 @@ tidak memerlukan server, build step, atau basis data tambahan.
 
 <img src="docs/preview-login.png" alt="Form login Bursa DBF" width="520">
 
-Akun bootstrap: **`admin`** / **`Bursa#2026!`**. Password awalnya didefinisikan di
-[`tools/build_dbf.py`](tools/build_dbf.py) (`BOOTSTRAP_PASSWORD`) dan **wajib diganti saat login
-pertama**. Setelah itu, buat akun user lewat **Pengguna → Tambah pengguna**.
+Mode default memakai **API Cloudflare D1**. Password admin D1 dibuat saat setup dan
+**tidak disimpan di repositori**; buat akun user lewat **Pengguna → Tambah pengguna**.
+Password `Bursa#2026!` hanya berlaku untuk fallback DBF (`?mode=dbf`), yang memakai
+akun bootstrap di [`tools/build_dbf.py`](tools/build_dbf.py).
 
 | Fitur | ADMIN | USER |
 | --- | :---: | :---: |
 | Ringkasan, analisis saham, portofolio, simulasi | ✓ | ✓ |
 | Tambah/ubah transaksi portofolio | ✓ | ✓ |
-| Update harga, ekspor/impor DBF, simpan folder | ✓ | — |
-| Database browser & reset data | ✓ | — |
+| Update harga | ✓ | — |
 | Manajemen pengguna & role | ✓ | — |
+| Ekspor/impor DBF & Database browser | ✓* | — |
+
+\* Hanya pada fallback DBF (`?mode=dbf`). Pada mode D1, tombol dan halaman DBF
+disembunyikan karena browser tidak lagi menerima file database.
 
 Aturan akun:
 
@@ -72,14 +76,10 @@ Aturan akun:
 - Admin tidak bisa menonaktifkan/menurunkan akun sendiri, dan sistem menolak menghapus admin aktif terakhir.
 - Aksi tambah/ubah/nonaktifkan pengguna meminta **password admin** sebagai verifikasi ulang.
 
-> **Penting — batas keamanan.** Aplikasi ini statis di GitHub Pages. Pemeriksaan role berjalan
-> di browser dan bisa dilewati lewat DevTools; berkas `PENGGUNA.DBF` (berisi hash PBKDF2 + salt)
-> dapat dibaca publik. Ini kontrol akses tingkat UI untuk demo/internal, **bukan** autentikasi
-> server. Jangan gunakan password penting. Untuk keamanan nyata, pindahkan login ke backend.
->
-> Perubahan pengguna dari admin disimpan di browser (localStorage). Agar berlaku untuk semua
-> pengunjung, ekspor `PENGGUNA.DBF` lalu commit ke repositori; jika tidak, akun baru hanya ada
-> di browser admin tersebut.
+> **Keamanan.** Pada mode D1, login dan role diperiksa Worker; browser tidak menerima
+> `PENGGUNA.DBF`, hash password, atau file database. Token disimpan di `sessionStorage`.
+> Pada fallback `?mode=dbf`, pemeriksaan role berjalan di browser dan `PENGGUNA.DBF`
+> dapat dibaca publik — gunakan hanya untuk pengembangan lokal.
 
 ## Backend Cloudflare D1 (SQLite)
 
@@ -91,18 +91,16 @@ Tersedia backend terpisah di **Cloudflare Worker + D1**:
 - Login, role, expiry, dan CRUD pengguna diperiksa di server.
 - Kode, skema, dan panduan deploy: [`cloudflare/README.md`](cloudflare/README.md).
 
-> Frontend GitHub Pages saat ini **masih memakai DBF** dan login client-side. Backend D1
-> sudah berjalan dan diuji, tetapi adapter frontend (mengganti `store.js`/`auth.js` ke API)
-> adalah langkah berikutnya. Selama belum diubah, nama tabel masih terlihat di Network tab
-> halaman GitHub Pages.
+Frontend sudah memakai API ini secara default: `store.js` memanggil `/api/bootstrap`,
+`auth.js` memakai `/api/login`, dan transaksi/pengguna dikirim ke Worker. Tambahkan
+`?mode=dbf` pada URL untuk fallback ke aplikasi DBF lama.
 
 ## Jalankan secara lokal
 
-Aplikasi membutuhkan HTTP server karena browser memblokir `fetch()` berkas `.DBF` dari `file://`.
-
 ```bash
 python -m http.server 8765
-# lalu buka http://localhost:8765
+# mode default: API D1
+# fallback DBF: http://localhost:8765/?mode=dbf
 ```
 
 Atau server apa pun (Live Server VS Code, `npx serve`, Nginx, dan sebagainya) yang menyajikan
@@ -135,28 +133,24 @@ Tidak ada build step: GitHub Pages menyajikan `index.html`, `assets/`, dan `data
 
 ## Bagaimana data disimpan?
 
+Mode default:
+
 ```text
-data/*.DBF ──fetch saat load──►  aplikasi  ──edit──►  localStorage (cermin kerja)
-                                    │                        │
-                                    └── Unduh .DBF / ZIP ◄───┘
-                                    └── Simpan ke folder (File System Access API)
+GitHub Pages  ──/api/bootstrap──►  Cloudflare Worker  ──SQL──►  D1 (SQLite)
+      │                                  │
+      └── login/token (sessionStorage) ──┘
 ```
 
-1. **Saat dimuat**, aplikasi mengambil [`data/manifest.json`](data/manifest.json) lalu membaca
-   8 berkas `.DBF` dari [`data/`](data). Ini sumber kebenaran untuk angka analisis.
-2. **Saat diedit** (hanya tabel `TRANSAKSI` dari UI), salinan kerja langsung ditulis ke
-   `localStorage` agar tidak hilang ketika halaman dimuat ulang. Header menampilkan status
-   **“belum diekspor”**.
-3. **Untuk menulis ke DBF asli**:
-   - **Unduh .DBF** (satu tabel) atau **Unduh ZIP** (semua tabel + `BACA-INI.txt`) dari halaman
-     *Database*, lalu ganti berkas di `data/` dan commit; atau
-   - **Simpan ke folder** — memilih folder `data/` lewat File System Access API
-     (Chrome/Edge, HTTPS atau `localhost`). Berkas `.DBF` di disk langsung ditimpa.
-4. **Reset data lokal** di halaman Database menghapus salinan browser dan memuat ulang berkas
-   `.DBF` dari server.
+1. **Saat login**, `auth.js` memanggil `POST /api/login`; token HMAC disimpan di
+   `sessionStorage`.
+2. **Data analisis** diambil dari `/api/bootstrap` (saham, valuasi, teknikal, skor,
+   dividen, historik, parameter, dan transaksi milik user). Browser tidak menerima
+   file `.DBF` atau hash password.
+3. **Transaksi dan pengguna** ditulis lewat API ke D1, sehingga berlaku lintas perangkat.
+4. **Fallback DBF** (`?mode=dbf`) memakai alur lama: `data/*.DBF` → localStorage →
+   Unduh ZIP / Simpan ke folder. Ini hanya untuk pengembangan lokal.
 
-GitHub Pages bersifat statis dan tidak dapat menulis ke server. Karena itu, perubahan yang
-ingin dilihat semua pengunjung harus di-commit kembali ke repositori (langkah 3).
+GitHub Pages tetap statis, tetapi data dinamis sekarang disimpan di D1.
 
 ## Memperbarui data
 
@@ -167,8 +161,9 @@ ingin dilihat semua pengunjung harus di-commit kembali ke repositori (langkah 3)
 ### 1. Harga saham (lewat UI)
 
 Buka **Saham → Update harga**, isi harga baru untuk satu atau beberapa emiten, lalu **Simpan harga**.
-Aplikasi menghitung ulang `PE`, `PB`, `DY`, dan `MoS` untuk emiten tersebut. Nilai wajar, skor,
-dan indikator teknikal **tidak** dihitung ulang.
+Pada mode D1, Worker menghitung ulang `PE`, `PB`, `DY`, dan `MoS` lalu menyimpannya ke D1.
+Pada fallback DBF, perhitungan dilakukan di browser. Nilai wajar, skor, dan indikator teknikal
+**tidak** dihitung ulang.
 
 Tanggal pembaruan disimpan di `PARAM.HARGA_PER` dan ditampilkan pada catatan tabel Saham/Portofolio.
 Setelah disimpan, status berubah menjadi *“belum diekspor”*: unduh **SAHAM.DBF** dan **VALUASI.DBF**

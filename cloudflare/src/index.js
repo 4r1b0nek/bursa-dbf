@@ -347,6 +347,11 @@ async function deleteTransaction(request, env, user, id) {
   return json({ ok: true }, 200, request, env);
 }
 
+async function clearTransactions(request, env, user) {
+  const result = await env.DB.prepare("DELETE FROM TRANSAKSI WHERE USER_ID = ?").bind(user.ID).run();
+  return json({ ok: true, deleted: result.meta?.changes ?? 0 }, 200, request, env);
+}
+
 /* ---------------------------------------------------------------- users */
 async function listUsers(request, env) {
   const rows = await env.DB.prepare("SELECT * FROM PENGGUNA ORDER BY ROLE DESC, USERNAME").all();
@@ -498,6 +503,7 @@ export default {
       if (url.pathname === "/api/bootstrap" && request.method === "GET") return await bootstrap(request, env, user);
       if (url.pathname === "/api/transactions" && request.method === "GET") return await listTransactions(request, env, user);
       if (url.pathname === "/api/transactions" && request.method === "POST") return await createTransaction(request, env, user);
+      if (url.pathname === "/api/transactions" && request.method === "DELETE") return await clearTransactions(request, env, user);
 
       const txMatch = url.pathname.match(/^\/api\/transactions\/(\d+)$/);
       if (txMatch && request.method === "PATCH") return await updateTransaction(request, env, user, Number(txMatch[1]));

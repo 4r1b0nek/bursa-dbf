@@ -9,10 +9,12 @@
  * data rahasia. Untuk keamanan nyata, autentikasi harus di server.
  */
 import * as DB from "./store.js";
+import * as API from "./api.js";
 
 export const SESSION_HOURS = 8;
 export const PASSWORD_ITERATIONS = 100000;
 export const MIN_PASSWORD = 8;
+export const apiMode = DB.apiMode;
 
 const SESSION_KEY = "bursa-dbf/session/v1";
 const encoder = new TextEncoder();
@@ -58,6 +60,22 @@ function safeEqual(a, b) {
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+function apiRow(user) {
+  if (!user) return null;
+  return {
+    ID: user.id,
+    USERNAME: user.username,
+    NAMA: user.name,
+    ROLE: user.role,
+    STATUS: user.status,
+    EXPIRED: user.expired || "",
+    MUSTCHG: user.mustChange ? "Y" : "N",
+    CREATED: user.created || "",
+    UPDATED: user.updated || "",
+    CATATAN: user.note || "",
+  };
+}
 
 export function users() {
   return DB.rows("PENGGUNA");
@@ -120,6 +138,16 @@ function readSession() {
 }
 
 export function currentUser() {
+  if (apiMode) {
+    const session = API.readSession();
+    if (!session) return null;
+    const row = apiRow(session.user);
+    if (!row || String(row.STATUS).toUpperCase() !== "AKTIF" || isExpired(row)) {
+      API.clearSession();
+      return null;
+    }
+    return row;
+  }
   const session = readSession();
   if (!session) return null;
   const row = getUser(session.id);
@@ -136,11 +164,21 @@ export function isAdmin() {
 }
 
 export function logout() {
+  if (apiMode) API.clearSession();
   sessionStorage.removeItem(SESSION_KEY);
 }
 
 /* ------------------------------------------------------------------ login */
 export async function login(username, password) {
+  if (apiMode) {
+    try {
+      const result = await API.login(String(username || "").trim(), password);
+      API.saveSession(result);
+      return { ok: true, user: apiRow(result.user), mustChange: Boolean(result.mustChange) };
+    } catch (err) {
+      return { ok: false, message: err.message || "Login gagal." };
+    }
+  }
   const row = findUser(username);
   if (!row) return { ok: false, message: "Username atau password salah." };
 
@@ -162,6 +200,14 @@ export async function login(username, password) {
 export async function verifyAdminPassword(password) {
   const row = currentUser();
   if (!row || roleOf(row) !== "ADMIN") return false;
+  if (apiMode) {
+    try {
+      await API.login(row.USERNAME, password);
+      return true;
+    } catch {
+      return false;
+    }
+  }
   const digest = await hashPassword(password, row.SALT, Number(row.ITER) || PASSWORD_ITERATIONS);
   return safeEqual(digest, row.PASSHASH);
 }
@@ -202,7 +248,18 @@ function validateExpiry(expired) {
 }
 
 /* --------------------------------------------------------------- CRUD */
+export async function loadUsers() {
+  if (!apiMode) return users();
+  const result = await API.listUsers();
+  return DB.setApiUsers(result.users || []);
+}
+
 export async function createUser({ username, name, role, password, expired, note }) {
+  if (apiMode) {
+    const result = await API.createUser({ username, name, role, password, expired, note });
+    await loadUsers();
+    return apiRow(result.user);
+  }
   if (!isAdmin()) throw new Error("Hanya administrator yang dapat membuat pengguna.");
   const usernameError = validateUsername(username);
   if (usernameError) throw new Error(usernameError);
@@ -233,6 +290,14 @@ export async function createUser({ username, name, role, password, expired, note
 }
 
 export async function updateUser(id, { name, role, password, expired, note }) {
+  if (apiMode) {
+    const result = await API.updateUser(id, {
+      name, role, expired, note,
+      ...(password ? { password } : {}),
+    });
+    await loadUsers();
+    return apiRow(result.user);
+  }
   if (!isAdmin()) throw new Error("Hanya administrator yang dapat mengubah pengguna.");
   const index = users().findIndex((u) => Number(u.ID) === Number(id));
   if (index < 0) throw new Error("Pengguna tidak ditemukan.");
@@ -272,6 +337,11 @@ export async function updateUser(id, { name, role, password, expired, note }) {
 }
 
 export async function setUserStatus(id, status) {
+  if (apiMode) {
+    await API.setUserStatus(id, status);
+    await loadUsers();
+    return;
+  }
   if (!isAdmin()) throw new Error("Hanya administrator yang dapat mengubah status pengguna.");
   const index = users().findIndex((u) => Number(u.ID) === Number(id));
   if (index < 0) throw new Error("Pengguna tidak ditemukan.");
@@ -292,6 +362,13 @@ export async function setUserStatus(id, status) {
 export async function changeOwnPassword(currentPassword, newPassword) {
   const row = currentUser();
   if (!row) throw new Error("Sesi berakhir. Silakan login lagi.");
+  if (apiMode) {
+    if (safeEqual(currentPassword, newPassword)) throw new Error("Password baru harus berbeda.");
+    await API.changePassword(currentPassword, newPassword);
+    const session = API.readSession();
+    if (session) API.updateSessionUser({ ...session.user, mustChange: false }, false);
+    return;
+  }
   const digest = await hashPassword(currentPassword, row.SALT, Number(row.ITER) || PASSWORD_ITERATIONS);
   if (!safeEqual(digest, row.PASSHASH)) throw new Error("Password saat ini salah.");
   const passwordError = validatePassword(newPassword);

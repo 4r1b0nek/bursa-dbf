@@ -9,10 +9,26 @@
  */
 import { parseDbf, buildDbf } from "./dbf.js";
 import { makeZip } from "./zip.js";
+import * as API from "./api.js";
 
 const LS_KEY = "bursa-dbf/store/v1";
 const IDB_NAME = "bursa-dbf";
 const IDB_STORE = "handles";
+
+/** Mode API D1 aktif bila index.html menetapkan window.BURSA_API_BASE. */
+export const apiMode = Boolean(globalThis.window?.BURSA_API_BASE);
+
+const API_LABELS = {
+  SAHAM: ["Master saham", "Profil, harga, rasio, dan rekomendasi emiten."],
+  VALUASI: ["Model valuasi", "Nilai wajar, margin of safety, dan skenario."],
+  TEKNIKAL: ["Indikator teknikal", "MA, RSI, MACD, ATR, dan level harga."],
+  SKOR: ["Skor faktor", "Skor fundamental, valuasi, dividen, teknikal, risiko, prospek."],
+  DIVIDEN: ["Riwayat dividen", "Dividen per tahun dan tipe."],
+  HISTORIK: ["Historik harga", "Harga mingguan 10 minggu."],
+  TRANSAKSI: ["Jurnal transaksi", "Transaksi portofolio pengguna."],
+  PENGGUNA: ["Pengguna", "Akun, role, status, dan masa berlaku."],
+  PARAM: ["Parameter", "Metadata aplikasi dan sumber harga."],
+};
 
 export const state = {
   manifest: null,
@@ -75,6 +91,110 @@ export function tableMeta(name) {
     fields: table.schema.length,
     bytes: table.bytes,
   };
+}
+
+/* ------------------------------------------------------------ API / D1 */
+function inferField(name, value) {
+  const isNumber = typeof value === "number";
+  return {
+    name,
+    type: isNumber ? "N" : "C",
+    length: isNumber ? 14 : Math.min(254, Math.max(1, String(value ?? "").length)),
+    dec: isNumber ? 2 : 0,
+  };
+}
+
+function apiTable(name, rows) {
+  const [label, description] = API_LABELS[name] || [name, "Data dari API D1"];
+  const fields = rows.length
+    ? Object.keys(rows[0]).map((key) => inferField(key, rows[0][key]))
+    : [];
+  return {
+    name,
+    label,
+    description,
+    file: `${name}.DBF`,
+    schema: fields,
+    rows,
+    bytes: 0,
+    updated: new Date().toISOString().slice(0, 10),
+    meta: { records: rows.length, fields: fields.length, bytes: 0 },
+  };
+}
+
+/**
+ * Isi store dari /api/bootstrap. Penamaan tabel internal tetap sama agar
+ * seluruh view, chart, dan kalkulasi portofolio tidak perlu diubah.
+ */
+export async function loadApi(payload = null) {
+  const data = payload || await API.bootstrap();
+  const params = data.params && typeof data.params === "object" ? data.params : {};
+  const paramRows = Object.entries(params).map(([KUNCI, NILAI]) => ({ KUNCI, NILAI }));
+
+  const previousUsers = state.tables.PENGGUNA;
+  const tables = {
+    SAHAM: apiTable("SAHAM", data.stocks || []),
+    VALUASI: apiTable("VALUASI", data.valuations || []),
+    TEKNIKAL: apiTable("TEKNIKAL", data.technicals || []),
+    SKOR: apiTable("SKOR", data.scores || []),
+    DIVIDEN: apiTable("DIVIDEN", data.dividends || []),
+    HISTORIK: apiTable("HISTORIK", data.history || []),
+    TRANSAKSI: apiTable("TRANSAKSI", data.transactions || []),
+    PENGGUNA: previousUsers || apiTable("PENGGUNA", []),
+    PARAM: apiTable("PARAM", paramRows),
+  };
+  state.tables = tables;
+  state.order = ["SAHAM", "VALUASI", "TEKNIKAL", "SKOR", "DIVIDEN", "HISTORIK", "TRANSAKSI", "PENGGUNA", "PARAM"];
+  state.manifest = {
+    app: "Bursa DBF",
+    version: "api-v1",
+    generated: data.meta?.dataDate || null,
+    dataDate: data.meta?.dataDate || null,
+    priceUpdated: data.meta?.priceDate || null,
+    source: "Cloudflare D1",
+    tables: state.order.map((name) => ({
+      name,
+      file: `${name}.DBF`,
+      label: tables[name].label,
+      description: tables[name].description,
+      records: tables[name].rows.length,
+      fields: tables[name].schema.length,
+      bytes: 0,
+    })),
+  };
+  state.ready = true;
+  state.dirty = false;
+  state.source = "api";
+  state.savedAt = nowISO();
+  emit();
+  return data;
+}
+
+export async function reloadApi() {
+  return loadApi();
+}
+
+/** Cache pengguna dari /api/users untuk halaman admin. */
+export function setApiUsers(list) {
+  const rows = (list || []).map((u) => ({
+    ID: u.id,
+    USERNAME: u.username,
+    NAMA: u.name,
+    ROLE: u.role,
+    STATUS: u.status,
+    EXPIRED: u.expired || "",
+    MUSTCHG: u.mustChange ? "Y" : "N",
+    CREATED: u.created || "",
+    UPDATED: u.updated || "",
+    CATATAN: u.note || "",
+  }));
+  const table = apiTable("PENGGUNA", rows);
+  state.tables.PENGGUNA = table;
+  if (!state.order.includes("PENGGUNA")) {
+    state.order.splice(state.order.length - 1, 0, "PENGGUNA");
+  }
+  emit();
+  return rows;
 }
 
 /* --------------------------------------------------------------- init */
@@ -736,6 +856,12 @@ export function priceSource() {
  * Nilai wajar, skor, dan indikator teknikal tidak dihitung ulang.
  */
 export function updatePrices(prices, date = new Date().toISOString().slice(0, 10)) {
+  if (apiMode) {
+    return API.updatePrices(prices).then(async (result) => {
+      await loadApi();
+      return Array.isArray(result.changed) ? result.changed.length : 0;
+    });
+  }
   const saham = rows("SAHAM");
   const valuasi = rows("VALUASI");
   let changed = 0;
