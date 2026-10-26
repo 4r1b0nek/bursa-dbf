@@ -485,6 +485,14 @@ export default {
       const user = await tokenUser(request, env);
       if (!user) return json({ error: "Tidak terautentikasi." }, 401, request, env);
 
+      if (String(user.MUSTCHG).toUpperCase() === "Y"
+        && !["/api/me", "/api/me/password"].includes(url.pathname)) {
+        return json({
+          error: "Ganti password wajib sebelum memakai API.",
+          code: "MUST_CHANGE",
+        }, 403, request, env);
+      }
+
       if (url.pathname === "/api/me" && request.method === "GET") return await me(request, env, user);
       if (url.pathname === "/api/me/password" && request.method === "POST") return await changePassword(request, env, user);
       if (url.pathname === "/api/bootstrap" && request.method === "GET") return await bootstrap(request, env, user);

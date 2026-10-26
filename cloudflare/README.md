@@ -37,7 +37,8 @@ Seed dibuat dari DBF:
 python scripts/export_seed.py
 ```
 
-`seed.sql` bersifat generated dan tidak di-commit.
+`seed.sql` bersifat generated dan tidak di-commit. Seed ini **tidak** menyertakan
+tabel `PENGGUNA`, jadi menjalankan `npm run db:seed` tidak menimpa akun/password D1.
 
 ## Secret
 
@@ -77,12 +78,12 @@ npm run deploy
 | POST | `/api/users/:id/status` | ADMIN |
 | POST | `/api/admin/prices` | ADMIN |
 
-Contoh login:
+Contoh login (ganti `<password-admin-D1>` dengan password yang diberikan saat setup):
 
 ```bash
 curl -X POST https://bursa-dbf-api.agus-asarry.workers.dev/api/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"Bursa#2026!"}'
+  -d '{"username":"admin","password":"<password-admin-D1>"}'
 ```
 
 Gunakan token:
