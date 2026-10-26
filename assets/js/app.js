@@ -4,6 +4,7 @@
  */
 import * as DB from "./store.js";
 import * as C from "./charts.js";
+import * as Auth from "./auth.js";
 import {
   esc, num, rupiah, compactRp, pct, pctRaw, signClass, dateID, bytes as fmtBytes,
   isNum, mean, clamp,
@@ -41,6 +42,8 @@ const PATHS = {
   clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   external: '<path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M18 14v5.5H4.5V6H10"/>',
   copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/>',
+  power: '<path d="M12 3v9"/><path d="M6.5 6.5a8 8 0 1 0 11 0"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
 };
 
 const icon = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${PATHS[name] || ""}</svg>`;
@@ -61,9 +64,11 @@ const ui = {
   showAll: false,
   sim: null,
   txEditing: null,
+  forceModal: false,
 };
 
 const mainEl = () => document.getElementById("main");
+const authRoot = () => document.getElementById("auth-root");
 const drawerRoot = () => document.getElementById("drawer-root");
 const modalRoot = () => document.getElementById("modal-root");
 
@@ -152,8 +157,119 @@ async function boot() {
   }
   bindGlobal();
   window.addEventListener("hashchange", route);
-  route();
   document.getElementById("foot-year").textContent = new Date().getFullYear();
+  if (!Auth.currentUser()) {
+    showLogin();
+  } else {
+    startApp();
+  }
+  setInterval(() => {
+    if (!Auth.currentUser() && !authRoot().childElementCount) {
+      showLogin("Sesi berakhir. Silakan login kembali.");
+    }
+  }, 60000);
+}
+
+/* ------------------------------------------------------------------ auth UI */
+function showLogin(message = "") {
+  document.body.classList.add("auth-locked");
+  const box = document.getElementById("user-box");
+  if (box) box.hidden = true;
+  for (const id of ["nav-database", "nav-users", "download-dbf"]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  }
+  authRoot().innerHTML = `
+    <div class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-brand">
+          <span class="brand-mark" aria-hidden="true">${icon("database")}</span>
+          <div><b>Bursa <span>DBF</span></b><small>Analisis 9 saham BEI</small></div>
+        </div>
+        <h1>Masuk ke aplikasi</h1>
+        <p class="auth-lede">Gunakan akun yang diberikan administrator. Sesi berlaku
+        ${Auth.SESSION_HOURS} jam dan berakhir saat tab ditutup.</p>
+        <div class="auth-error${message ? " show" : ""}" id="login-error">${esc(message)}</div>
+        <form id="login-form" autocomplete="on" novalidate>
+          <div class="field">
+            <label for="login-user">Username</label>
+            <input id="login-user" name="username" autocomplete="username" autocapitalize="none" required>
+          </div>
+          <div class="field">
+            <label for="login-pass">Password</label>
+            <input id="login-pass" name="password" type="password" autocomplete="current-password" required>
+          </div>
+          <button class="btn btn-primary" type="submit" id="login-submit">${icon("arrow")} Masuk</button>
+        </form>
+        <div class="auth-lock">${icon("shield")} Akses terbatas · hubungi admin jika akun kedaluwarsa</div>
+        <p class="auth-note">Aplikasi statis: login ini mengatur tampilan, bukan pengganti
+        autentikasi server. Jangan gunakan password penting.</p>
+      </div>
+    </div>`;
+  const form = document.getElementById("login-form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const button = document.getElementById("login-submit");
+    const error = document.getElementById("login-error");
+    error.classList.remove("show");
+    button.disabled = true;
+    button.textContent = "Memeriksa…";
+    try {
+      const result = await Auth.login(form.username.value, form.password.value);
+      if (!result.ok) {
+        error.textContent = result.message;
+        error.classList.add("show");
+        return;
+      }
+      startApp();
+    } catch (err) {
+      error.textContent = err.message || "Gagal login.";
+      error.classList.add("show");
+    } finally {
+      button.disabled = false;
+      button.innerHTML = `${icon("arrow")} Masuk`;
+    }
+  });
+  setTimeout(() => document.getElementById("login-user")?.focus(), 50);
+}
+
+function startApp() {
+  const user = Auth.currentUser();
+  if (!user) {
+    showLogin("Sesi berakhir. Silakan login kembali.");
+    return;
+  }
+  authRoot().innerHTML = "";
+  document.body.classList.remove("auth-locked");
+  applyRoleUI(user);
+  route();
+  if (String(user.MUSTCHG).toUpperCase() === "Y") {
+    openChangePasswordModal({ forced: true });
+  }
+}
+
+function applyRoleUI(user) {
+  const admin = Auth.roleOf(user) === "ADMIN";
+  const box = document.getElementById("user-box");
+  if (box) box.hidden = false;
+  const name = document.getElementById("user-name");
+  const role = document.getElementById("user-role");
+  const avatar = document.getElementById("user-avatar");
+  if (name) name.textContent = user.NAMA || user.USERNAME;
+  if (role) role.textContent = admin ? "Administrator" : "User";
+  if (avatar) avatar.textContent = String(user.NAMA || user.USERNAME || "?").slice(0, 1).toUpperCase();
+  const navDb = document.getElementById("nav-database");
+  const navUsers = document.getElementById("nav-users");
+  const download = document.getElementById("download-dbf");
+  if (navDb) navDb.hidden = !admin;
+  if (navUsers) navUsers.hidden = !admin;
+  if (download) download.hidden = !admin;
+}
+
+function requireAdmin() {
+  if (Auth.isAdmin()) return true;
+  toast("Fitur ini hanya untuk administrator.", "err");
+  return false;
 }
 
 function bindGlobal() {
@@ -179,10 +295,19 @@ function bindGlobal() {
 
 /* ------------------------------------------------------------------ route */
 function route() {
+  if (!Auth.currentUser()) {
+    showLogin("Sesi berakhir. Silakan login kembali.");
+    return;
+  }
   const raw = (location.hash || "#/ringkasan").replace(/^#\/?/, "");
   const [viewRaw, paramRaw] = raw.split("/");
-  const view = ["ringkasan", "saham", "portofolio", "simulasi", "database"].includes(viewRaw)
+  const view = ["ringkasan", "saham", "portofolio", "simulasi", "database", "pengguna"].includes(viewRaw)
     ? viewRaw : "ringkasan";
+  if ((view === "database" || view === "pengguna") && !Auth.isAdmin()) {
+    toast("Halaman ini hanya untuk administrator.", "err");
+    location.hash = "#/ringkasan";
+    return;
+  }
   ui.view = view;
   const detail = view === "saham" && paramRaw ? paramRaw.toUpperCase() : null;
 
@@ -203,6 +328,7 @@ function viewTitle(view) {
     portofolio: "Portofolio",
     simulasi: "Simulasi investasi",
     database: "Database DBF",
+    pengguna: "Manajemen pengguna",
   }[view] || "Bursa DBF";
 }
 
@@ -213,6 +339,7 @@ function render() {
     portofolio: viewPortfolio,
     simulasi: viewSimulation,
     database: viewDatabase,
+    pengguna: viewUsers,
   };
   mainEl().innerHTML = (views[ui.view] || viewDashboard)();
   document.querySelectorAll(".nav a").forEach((a) => {
@@ -338,7 +465,7 @@ function viewDashboard() {
         Semua angka dibaca dari tabel <b>DBF</b> — format basis data yang bisa dibuka Excel, LibreOffice, atau Python.</p>
       <div class="hero-actions">
         <a class="btn btn-primary" href="#/saham">${icon("chart")} Lihat analisis</a>
-        <a class="btn btn-ghost" href="#/database">${icon("database")} Struktur DBF</a>
+        ${Auth.isAdmin() ? `<a class="btn btn-ghost" href="#/database">${icon("database")} Struktur DBF</a>` : ""}
       </div>
       <div class="hero-meta">
         <span>${icon("layers")} ${DB.state.order.length} tabel DBF</span>
@@ -471,8 +598,8 @@ function viewStocks() {
     </select>
     <span class="count" id="stock-count">${list.length} dari ${stocks.length} emiten</span>
     <div class="grow"></div>
-    <button class="btn btn-ghost btn-sm" data-action="price-editor">${icon("edit")} Update harga</button>
-    <button class="btn btn-ghost btn-sm" data-action="export-all">${icon("download")} Unduh DBF</button>
+    ${Auth.isAdmin() ? `<button class="btn btn-ghost btn-sm" data-action="price-editor">${icon("edit")} Update harga</button>
+    <button class="btn btn-ghost btn-sm" data-action="export-all">${icon("download")} Unduh DBF</button>` : ""}
   </div>
 
   <div class="card flush">
@@ -774,7 +901,7 @@ function viewPortfolio() {
   ${sectionHead("Portofolio", "Dihitung dari tabel TRANSAKSI.DBF dengan metode biaya rata-rata (1 lot = 100 lembar).",
     `<div class="wrap-gap">
       <button class="btn btn-primary" data-action="tx-add">${icon("plus")} Tambah transaksi</button>
-      <button class="btn btn-ghost" data-action="export-table" data-name="TRANSAKSI">${icon("download")} TRANSAKSI.DBF</button>
+      ${Auth.isAdmin() ? `<button class="btn btn-ghost" data-action="export-table" data-name="TRANSAKSI">${icon("download")} TRANSAKSI.DBF</button>` : ""}
     </div>`)}
   ${kpis}
   <section class="grid grid-2-1">
@@ -799,8 +926,100 @@ function viewPortfolio() {
 
   <div class="callout mt-3">${icon("database")}
     <div><b>Penyimpanan.</b> Setiap perubahan langsung disimpan di penyimpanan browser agar tidak hilang saat dimuat ulang.
-    Agar berkas <span class="mono">TRANSAKSI.DBF</span> ikut berubah, gunakan <b>Unduh .DBF</b> atau
-    <a href="#/database">Simpan ke folder</a> di halaman Database.</div>
+    ${Auth.isAdmin()
+      ? `Agar berkas <span class="mono">TRANSAKSI.DBF</span> ikut berubah, gunakan <b>Unduh .DBF</b> atau
+         <a href="#/database">Simpan ke folder</a> di halaman Database.`
+      : "Hubungi administrator untuk menyimpan perubahan ini ke berkas DBF."}</div>
+  </div>`;
+}
+
+/* ------------------------------------------------------------------ pengguna */
+const USER_STATUS = {
+  AKTIF: ["aktif", "Aktif"],
+  NONAKTIF: ["nonaktif", "Nonaktif"],
+  KEDALUWARSA: ["expired", "Kedaluwarsa"],
+  "SEGERA BERAKHIR": ["warning", "Segera berakhir"],
+};
+
+function userStatusChip(row) {
+  const status = Auth.statusOf(row);
+  const [tone, label] = USER_STATUS[status] || ["nonaktif", status];
+  return `<span class="status-chip ${tone}">${label}</span>`;
+}
+
+function expiryCell(row) {
+  if (!row.EXPIRED) return `<span class="expiry-text muted">Tidak ada</span>`;
+  const left = Auth.daysLeft(row);
+  const cls = left < 0 ? "expired" : left <= 7 ? "warning" : "";
+  const note = left === null ? "" : left < 0 ? ` · lewat ${Math.abs(left)} hari` : left === 0 ? " · hari ini" : ` · ${left} hari`;
+  return `<span class="expiry-text ${cls}">${dateID(row.EXPIRED)}${note}</span>`;
+}
+
+function viewUsers() {
+  if (!Auth.isAdmin()) {
+    return `<div class="card">${emptyState("Akses ditolak", "Halaman ini hanya untuk administrator.", "", "")}</div>`;
+  }
+  const me = Auth.currentUser();
+  const list = Auth.users().slice().sort((a, b) => {
+    const roleDiff = (Auth.roleOf(b) === "ADMIN" ? 1 : 0) - (Auth.roleOf(a) === "ADMIN" ? 1 : 0);
+    return roleDiff || String(a.USERNAME).localeCompare(String(b.USERNAME));
+  });
+  const adminCount = list.filter((u) => Auth.roleOf(u) === "ADMIN" && String(u.STATUS).toUpperCase() === "AKTIF").length;
+  const activeCount = list.filter((u) => ["AKTIF", "SEGERA BERAKHIR"].includes(Auth.statusOf(u))).length;
+  const attention = list.filter((u) => ["KEDALUWARSA", "NONAKTIF", "SEGERA BERAKHIR"].includes(Auth.statusOf(u))).length;
+
+  const rows = list.map((u) => {
+    const isSelf = me && Number(me.ID) === Number(u.ID);
+    const active = String(u.STATUS).toUpperCase() === "AKTIF";
+    return `<tr>
+      <td><div class="who"><b>${esc(u.USERNAME)}</b><small>${esc(u.NAMA)}${isSelf ? " · Anda" : ""}</small></div></td>
+      <td><span class="role-chip ${Auth.roleOf(u) === "ADMIN" ? "admin" : "user"}">${Auth.roleOf(u)}</span></td>
+      <td>${userStatusChip(u)}</td>
+      <td>${expiryCell(u)}</td>
+      <td class="small muted">${u.UPDATED ? dateID(u.UPDATED) : "—"}</td>
+      <td class="num">
+        <div class="user-actions">
+          <button class="btn btn-ghost btn-sm" data-action="user-edit" data-id="${u.ID}">${icon("edit")} Ubah</button>
+          ${isSelf ? "" : `<button class="btn ${active ? "btn-danger" : "btn-subtle"} btn-sm" data-action="user-toggle" data-id="${u.ID}">${icon("power")} ${active ? "Nonaktifkan" : "Aktifkan"}</button>`}
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+
+  return `
+  ${sectionHead("Manajemen pengguna", "Kelola akun, role, status, dan masa berlaku. Hanya administrator yang dapat membuka halaman ini.",
+    `<div class="wrap-gap">
+      <button class="btn btn-ghost" data-action="export-table" data-name="PENGGUNA">${icon("download")} PENGGUNA.DBF</button>
+      <button class="btn btn-primary" data-action="user-add">${icon("plus")} Tambah pengguna</button>
+    </div>`)}
+
+  <div class="auth-banner">${icon("alert")}
+    <div><b>Kontrol akses mode statis.</b> Aplikasi ini berjalan di GitHub Pages, sehingga role diperiksa di browser
+    dan berkas <span class="mono">PENGGUNA.DBF</span> dapat dibaca publik. Password disimpan sebagai hash PBKDF2 + salt,
+    tetapi ini bukan pengganti autentikasi server. Perubahan pengguna hanya tersimpan di browser sampai
+    <span class="mono">PENGGUNA.DBF</span> diekspor dan di-commit.</div>
+  </div>
+
+  <section class="grid grid-4 section">
+    ${kpi("Total akun", num(list.length, 0), "Admin dan user", "users", "rgba(15,118,110,.14)")}
+    ${kpi("Admin aktif", num(adminCount, 0), "Akses penuh", "shield", "rgba(14,165,233,.12)")}
+    ${kpi("Akun aktif", num(activeCount, 0), "Boleh login", "check", "rgba(4,120,87,.14)")}
+    ${kpi("Perlu perhatian", num(attention, 0), "Nonaktif / kedaluwarsa / ≤7 hari", "alert", "rgba(180,83,9,.13)")}
+  </section>
+
+  <div class="card flush">
+    <div class="card-head" style="padding:18px 20px 0">
+      <div><h3>Daftar pengguna</h3><p>${list.length} akun · sesi login berlaku ${Auth.SESSION_HOURS} jam.</p></div>
+      <span class="chip brand">ADMIN-only</span>
+    </div>
+    <div class="table-wrap mt-2">
+      <table class="data user-table">
+        <thead><tr><th>Pengguna</th><th>Role</th><th>Status</th><th>Berlaku s/d</th><th>Diperbarui</th><th class="num">Aksi</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" class="muted center" style="padding:28px">Belum ada pengguna.</td></tr>`}</tbody>
+      </table>
+    </div>
+    <p class="footnote" style="padding:0 20px 16px">User biasa hanya dapat membuka Ringkasan, Saham, Portofolio, dan Simulasi.
+    Database, update harga, ekspor DBF, dan manajemen pengguna khusus admin.</p>
   </div>`;
 }
 
@@ -1075,7 +1294,38 @@ async function onClick(e) {
   const el = e.target.closest("[data-action]");
   if (!el) return;
   const action = el.dataset.action;
+  const adminOnly = new Set([
+    "price-editor", "export-table", "export-all", "reload-reference", "save-folder",
+    "import", "select-table", "toggle-show-all", "reset-db",
+    "user-add", "user-edit", "user-toggle",
+  ]);
+  if (adminOnly.has(action) && !requireAdmin()) return;
 
+  if (action === "logout") {
+    Auth.logout();
+    closeDrawer(false);
+    closeModal(true);
+    ui.detail = null;
+    history.replaceState(null, "", "#/ringkasan");
+    showLogin("Anda telah keluar.");
+    return;
+  }
+  if (action === "change-password") {
+    openChangePasswordModal({});
+    return;
+  }
+  if (action === "user-add") {
+    openUserModal();
+    return;
+  }
+  if (action === "user-edit") {
+    openUserModal(Number(el.dataset.id));
+    return;
+  }
+  if (action === "user-toggle") {
+    openUserStatusModal(Number(el.dataset.id));
+    return;
+  }
   if (action === "open-stock") {
     location.hash = `#/saham/${el.dataset.code}`;
     return;
@@ -1225,10 +1475,228 @@ async function importFiles(input) {
 }
 
 /* ------------------------------------------------------------------ modal transaksi */
-function closeModal() {
+function closeModal(force = false) {
+  if (ui.forceModal && !force) return;
+  ui.forceModal = false;
   modalRoot().innerHTML = "";
   ui.txEditing = null;
   if (!ui.detail) document.body.classList.remove("no-scroll");
+}
+
+function modalShell({ title, subtitle, body, footer, width = "560px", id = "modal-title" }) {
+  return `
+    <div class="modal-overlay">
+      <div class="modal" style="width:min(${width},100%)" role="dialog" aria-modal="true" aria-labelledby="${id}">
+        <div class="modal-head">
+          <div><h2 id="${id}">${title}</h2><p>${subtitle}</p></div>
+          <button class="drawer-close" data-action="close-modal" aria-label="Tutup">${icon("x")}</button>
+        </div>
+        ${body}
+        <div class="modal-foot">${footer}</div>
+      </div>
+    </div>`;
+}
+
+function openChangePasswordModal({ forced = false } = {}) {
+  const user = Auth.currentUser();
+  if (!user) return showLogin("Sesi berakhir. Silakan login kembali.");
+  ui.forceModal = forced;
+  modalRoot().innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal" style="width:min(480px,100%)" role="dialog" aria-modal="true" aria-labelledby="pw-title">
+        <div class="modal-head">
+          <div><h2 id="pw-title">${forced ? "Ganti password wajib" : "Ganti password"}</h2>
+          <p>${forced ? "Akun ini memakai password awal. Ganti sebelum melanjutkan." : `Akun ${esc(user.USERNAME)}.`}</p></div>
+          ${forced ? "" : `<button class="drawer-close" data-action="close-modal" aria-label="Tutup">${icon("x")}</button>`}
+        </div>
+        <form id="pw-form" class="modal-body" novalidate>
+          <div class="field"><label for="pw-current">Password saat ini</label><input id="pw-current" name="current" type="password" autocomplete="current-password" required></div>
+          <div class="field"><label for="pw-new">Password baru</label><input id="pw-new" name="new" type="password" autocomplete="new-password" required>
+            <span class="help">Minimal ${Auth.MIN_PASSWORD} karakter, mengandung huruf dan angka.</span></div>
+          <div class="field"><label for="pw-confirm">Ulangi password baru</label><input id="pw-confirm" name="confirm" type="password" autocomplete="new-password" required></div>          <div class="form-error" id="pw-error"></div>
+          <div class="callout mt-2">${icon("info")}<div>${forced ? "Modal ini tidak dapat ditutup sampai password berhasil diganti." : "Setelah diganti, gunakan password baru pada login berikutnya."}</div></div>
+        </form>
+        <div class="modal-foot">
+          ${forced ? "" : `<button class="btn btn-ghost" type="button" data-action="close-modal">Batal</button>`}
+          <div class="right"><button class="btn btn-primary" type="submit" form="pw-form">${icon("check")} Simpan password</button></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.classList.add("no-scroll");
+  const overlay = modalRoot().querySelector(".modal-overlay");
+  overlay.addEventListener("mousedown", (ev) => { if (ev.target === overlay && !forced) closeModal(); });
+
+  const form = document.getElementById("pw-form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const error = document.getElementById("pw-error");
+    error.classList.remove("show");
+    if (form.new.value !== form.confirm.value) {
+      error.textContent = "Konfirmasi password tidak sama.";
+      error.classList.add("show");
+      return;
+    }
+    try {
+      await Auth.changeOwnPassword(form.current.value, form.new.value);
+      ui.forceModal = false;
+      closeModal(true);
+      toast("Password berhasil diperbarui");
+      const refreshed = Auth.currentUser();
+      if (refreshed) applyRoleUI(refreshed);
+      route();
+    } catch (err) {
+      error.textContent = err.message;
+      error.classList.add("show");
+    }
+  });
+  setTimeout(() => document.getElementById(forced ? "pw-new" : "pw-current")?.focus(), 60);
+}
+
+function openAdminVerify({ title, message, confirmLabel, successMessage, onConfirm }) {
+  modalRoot().innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal" style="width:min(480px,100%)" role="dialog" aria-modal="true" aria-labelledby="verify-title">
+        <div class="modal-head">
+          <div><h2 id="verify-title">${title}</h2><p>${message}</p></div>
+          <button class="drawer-close" data-action="close-modal" aria-label="Tutup">${icon("x")}</button>
+        </div>
+        <form id="verify-form" class="modal-body" novalidate>
+          <div class="field"><label for="verify-pass">Password administrator</label>
+            <input id="verify-pass" name="password" type="password" autocomplete="current-password" required autofocus></div>
+          <div class="form-error" id="verify-error"></div>
+          <div class="callout mt-2">${icon("shield")}<div>Verifikasi ulang diperlukan untuk tindakan administratif.</div></div>
+        </form>
+        <div class="modal-foot">
+          <button class="btn btn-ghost" type="button" data-action="close-modal">Batal</button>
+          <div class="right"><button class="btn btn-primary" type="submit" form="verify-form">${confirmLabel}</button></div>
+        </div>
+      </div>
+    </div>`;
+  document.body.classList.add("no-scroll");
+  const overlay = modalRoot().querySelector(".modal-overlay");
+  overlay.addEventListener("mousedown", (ev) => { if (ev.target === overlay) closeModal(); });
+  const form = document.getElementById("verify-form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const error = document.getElementById("verify-error");
+    error.classList.remove("show");
+    const ok = await Auth.verifyAdminPassword(form.password.value);
+    if (!ok) {
+      error.textContent = "Password administrator salah.";
+      error.classList.add("show");
+      return;
+    }
+    try {
+      await onConfirm();
+      closeModal(true);
+      toast(successMessage);
+      refresh();
+    } catch (err) {
+      error.textContent = err.message;
+      error.classList.add("show");
+    }
+  });
+  setTimeout(() => document.getElementById("verify-pass")?.focus(), 60);
+}
+
+function openUserStatusModal(id) {
+  const target = Auth.getUser(id);
+  const me = Auth.currentUser();
+  if (!target) return;
+  if (me && Number(me.ID) === Number(target.ID)) {
+    toast("Tidak bisa menonaktifkan akun sendiri.", "err");
+    return;
+  }
+  const activate = String(target.STATUS).toUpperCase() !== "AKTIF";
+  openAdminVerify({
+    title: activate ? "Aktifkan pengguna" : "Nonaktifkan pengguna",
+    message: `${activate ? "Aktifkan kembali" : "Nonaktifkan"} akun ${target.USERNAME} (${target.NAMA})?`,
+    confirmLabel: activate ? "Aktifkan" : "Nonaktifkan",
+    successMessage: `Akun ${target.USERNAME} ${activate ? "diaktifkan" : "dinonaktifkan"}`,
+    onConfirm: () => Auth.setUserStatus(target.ID, activate ? "AKTIF" : "NONAKTIF"),
+  });
+}
+
+function openUserModal(id = null) {
+  const existing = id ? Auth.getUser(id) : null;
+  const me = Auth.currentUser();
+  const isSelf = existing && me && Number(existing.ID) === Number(me.ID);
+  const title = existing ? "Ubah pengguna" : "Tambah pengguna";
+  modalRoot().innerHTML = modalShell({
+    title,
+    subtitle: existing ? `Akun ${esc(existing.USERNAME)} · perubahan dicatat di PENGGUNA.DBF.` : "Akun baru wajib mengganti password saat login pertama.",
+    width: "620px",
+    id: "user-title",
+    body: `
+      <form id="user-form" class="modal-body" novalidate>
+        <div class="form-grid">
+          <div class="field"><label for="user-username">Username</label>
+            <input id="user-username" name="username" value="${existing ? esc(existing.USERNAME) : ""}" ${existing ? "disabled" : "autocomplete=off"} maxlength="20" required>
+            <span class="help">3–20 karakter: huruf, angka, titik, garis bawah, strip.</span></div>
+          <div class="field"><label for="user-name">Nama lengkap</label>
+            <input id="user-name" name="name" value="${existing ? esc(existing.NAMA) : ""}" maxlength="40" required></div>
+          <div class="field"><label for="user-role">Role</label>
+            <select id="user-role" name="role" ${isSelf ? "disabled" : ""}>
+              <option value="USER" ${existing && existing.ROLE === "USER" ? "selected" : ""}>USER — fitur terbatas</option>
+              <option value="ADMIN" ${existing && existing.ROLE === "ADMIN" ? "selected" : ""}>ADMIN — semua fitur</option>
+            </select>
+            ${isSelf ? `<span class="help">Role akun sendiri tidak dapat diubah.</span>` : ""}</div>
+          <div class="field"><label for="user-expired">Berlaku sampai</label>
+            <input id="user-expired" name="expired" type="date" value="${existing?.EXPIRED || ""}">
+            <span class="help">Kosongkan untuk tanpa kedaluwarsa.</span></div>
+          <div class="field"><label for="user-pass">${existing ? "Password baru (opsional)" : "Password awal"}</label>
+            <input id="user-pass" name="password" type="password" autocomplete="new-password" ${existing ? "" : "required"}>
+            <span class="help">Minimal ${Auth.MIN_PASSWORD} karakter, huruf + angka.${existing ? " Kosongkan jika tidak diubah." : ""}</span></div>
+          <div class="field"><label for="user-confirm">Ulangi password</label>
+            <input id="user-confirm" name="confirm" type="password" autocomplete="new-password"></div>
+          <div class="field span-2"><label for="user-note">Catatan</label>
+            <input id="user-note" name="note" maxlength="60" value="${existing ? esc(existing.CATATAN || "") : ""}" placeholder="mis. divisi riset"></div>
+          <div class="field span-2"><label for="user-admin-pass">Password administrator Anda</label>
+            <input id="user-admin-pass" name="adminpass" type="password" autocomplete="current-password" required>
+            <span class="help">Verifikasi ulang sebelum menyimpan perubahan pengguna.</span></div>
+        </div>
+        <div class="form-error" id="user-error"></div>
+      </form>`,
+    footer: `
+      <button class="btn btn-ghost" type="button" data-action="close-modal">Batal</button>
+      <div class="right"><button class="btn btn-primary" type="submit" form="user-form">${icon("check")} ${existing ? "Simpan perubahan" : "Buat pengguna"}</button></div>`,
+  });
+  document.body.classList.add("no-scroll");
+  const overlay = modalRoot().querySelector(".modal-overlay");
+  overlay.addEventListener("mousedown", (ev) => { if (ev.target === overlay) closeModal(); });
+  const form = document.getElementById("user-form");
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const error = document.getElementById("user-error");
+    error.classList.remove("show");
+    const show = (message) => { error.textContent = message; error.classList.add("show"); };
+    if (form.password.value !== form.confirm.value) return show("Konfirmasi password tidak sama.");
+    const ok = await Auth.verifyAdminPassword(form.adminpass.value);
+    if (!ok) return show("Password administrator salah.");
+    try {
+      const payload = {
+        name: form.name.value,
+        role: form.role.value,
+        expired: form.expired.value,
+        note: form.note.value,
+        password: form.password.value || null,
+      };
+      if (existing) {
+        await Auth.updateUser(existing.ID, payload);
+        toast(`Pengguna ${existing.USERNAME} diperbarui`);
+      } else {
+        const created = await Auth.createUser({ username: form.username.value, ...payload });
+        toast(`Pengguna ${created.USERNAME} dibuat · password wajib diganti saat login`);
+      }
+      const current = Auth.currentUser();
+      if (current) applyRoleUI(current);
+      closeModal(true);
+      refresh();
+    } catch (err) {
+      show(err.message);
+    }
+  });
+  setTimeout(() => document.getElementById(existing ? "user-name" : "user-username")?.focus(), 60);
 }
 
 function openPriceModal() {

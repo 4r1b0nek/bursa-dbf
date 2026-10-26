@@ -53,17 +53,28 @@
         <a href="#/saham" data-nav="saham">Saham</a>
         <a href="#/portofolio" data-nav="portofolio">Portofolio</a>
         <a href="#/simulasi" data-nav="simulasi">Simulasi</a>
-        <a href="#/database" data-nav="database">Database</a>
+        <a href="#/database" id="nav-database" data-nav="database">Database</a>
+        <a href="#/pengguna" id="nav-users" data-nav="pengguna" hidden>Pengguna</a>
       </nav>
 
       <div class="topbar-actions">
         <span class="db-pill" id="db-status" title="Status database">
           <span class="dot"></span><span>memuat…</span>
         </span>
-        <button class="btn btn-ghost btn-sm" data-action="export-all" title="Unduh semua tabel DBF sebagai ZIP" aria-label="Unduh semua tabel DBF">
+        <button class="btn btn-ghost btn-sm" id="download-dbf" data-action="export-all" title="Unduh semua tabel DBF sebagai ZIP" aria-label="Unduh semua tabel DBF">
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"/><path d="M8 11.5l4 4 4-4"/><path d="M5 19.5h14"/></svg>
           <span>Unduh DBF</span>
         </button>
+        <div class="user-box" id="user-box" hidden>
+          <span class="avatar" id="user-avatar" aria-hidden="true">A</span>
+          <span class="user-meta"><b id="user-name">—</b><small id="user-role">—</small></span>
+          <button class="btn btn-ghost btn-sm btn-icon" data-action="change-password" title="Ganti password" aria-label="Ganti password">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h8"/><path d="M17 12v3M20 12v2"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm btn-icon" data-action="logout" title="Keluar" aria-label="Keluar">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5H6v14h8"/><path d="M11 12h9"/><path d="M17 8.5l3.5 3.5L17 15.5"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -74,7 +85,7 @@
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"/><path d="M4.5 5v6.5c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3V5"/><path d="M4.5 11.5V18c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-6.5"/></svg>
       </div>
       <h3>Memuat tabel DBF…</h3>
-      <p>Membaca delapan tabel dari folder <span class="mono">data/</span>.</p>
+      <p>Membaca sembilan tabel dari folder <span class="mono">data/</span>.</p>
     </div>
   </main>
 
@@ -93,6 +104,7 @@
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="auth-root"></div>
   <div id="drawer-root"></div>
   <div id="modal-root"></div>
 

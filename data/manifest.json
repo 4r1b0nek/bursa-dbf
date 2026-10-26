@@ -1,10 +1,10 @@
 {
  "app": "Bursa DBF",
  "version": "1.0.0",
- "generated": "2026-10-24T13:37:07",
+ "generated": "2026-10-26T15:18:09",
  "dataDate": "2026-10-21",
  "encoding": "ascii / dBase III (cp1252 driver)",
- "source": "stockanalysis.com + riset berita (Kontan, CNBC, Antara, IDX Channel), 21 Okt 2026",
+ "source": "stockanalysis.com + riset berita (Kontan, CNBC, Antara, IDX Channel), 2026-10-21",
  "fx": 17997,
  "coe": 0.135,
  "tables": [
@@ -16,7 +16,7 @@
    "records": 9,
    "fields": 39,
    "bytes": 7591,
-   "sha1": "43735268291a"
+   "sha1": "7b9a089bcd4f"
   },
   {
    "name": "VALUASI",
@@ -26,7 +26,7 @@
    "records": 9,
    "fields": 23,
    "bytes": 2930,
-   "sha1": "05077bcb0b2c"
+   "sha1": "e7cf05c2caa3"
   },
   {
    "name": "TEKNIKAL",
@@ -36,7 +36,7 @@
    "records": 9,
    "fields": 19,
    "bytes": 2082,
-   "sha1": "ced9f8c14ab3"
+   "sha1": "fdfded5d4809"
   },
   {
    "name": "SKOR",
@@ -46,7 +46,7 @@
    "records": 9,
    "fields": 8,
    "bytes": 533,
-   "sha1": "5f6bb4879eea"
+   "sha1": "0b4fdbe2953a"
   },
   {
    "name": "DIVIDEN",
@@ -56,7 +56,7 @@
    "records": 46,
    "fields": 4,
    "bytes": 1404,
-   "sha1": "eda5e7a1b952"
+   "sha1": "85d324eec85e"
   },
   {
    "name": "HISTORIK",
@@ -66,7 +66,7 @@
    "records": 90,
    "fields": 4,
    "bytes": 2322,
-   "sha1": "c5b9ab063334"
+   "sha1": "b65d7056991d"
   },
   {
    "name": "TRANSAKSI",
@@ -76,7 +76,17 @@
    "records": 5,
    "fields": 8,
    "bytes": 865,
-   "sha1": "8156c77c9041"
+   "sha1": "86b869377019"
+  },
+  {
+   "name": "PENGGUNA",
+   "file": "PENGGUNA.DBF",
+   "label": "Pengguna & role",
+   "description": "Akun login: admin/user, status aktif, tanggal kedaluwarsa, hash password PBKDF2.",
+   "records": 1,
+   "fields": 13,
+   "bytes": 720,
+   "sha1": "48418922bc58"
   },
   {
    "name": "PARAM",
@@ -89,6 +99,6 @@
    "sha1": "4bfe3b5e89e6"
   }
  ],
- "priceUpdated": "2026-10-26T14:19:56+07:00",
+ "priceUpdated": "2026-10-26T15:18:21+07:00",
  "priceSource": "Yahoo Finance (delayed)"
 }

@@ -11,10 +11,12 @@ skenario, teknikal). Hasil: data/*.DBF + data/manifest.json.
 from __future__ import annotations
 
 import argparse
+import base64
 import datetime as dt
 import hashlib
 import json
 import os
+import secrets
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -28,6 +30,11 @@ from model import M                                    # noqa: E402
 
 BUILD_DATE = dt.date.today()
 DATA_DATE = "2026-10-21"
+
+BOOTSTRAP_USER = "admin"
+BOOTSTRAP_NAME = "Administrator"
+BOOTSTRAP_PASSWORD = "Bursa#2026!"
+PASSWORD_ITERATIONS = 210_000
 
 CATATAN = {
     "TLKM": dict(
@@ -308,6 +315,49 @@ def build_transaksi(preserve=True):
                fields, rows)
 
 
+def _password_hash(password: str):
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, PASSWORD_ITERATIONS, dklen=32
+    )
+    return (
+        base64.b64encode(digest).decode("ascii"),
+        base64.b64encode(salt).decode("ascii"),
+        PASSWORD_ITERATIONS,
+    )
+
+
+def build_pengguna(preserve=True):
+    fields = [
+        Field("ID", "N", 5, 0), Field("USERNAME", "C", 20), Field("NAMA", "C", 40),
+        Field("ROLE", "C", 8), Field("PASSHASH", "C", 64), Field("SALT", "C", 32),
+        Field("ITER", "N", 7, 0), Field("STATUS", "C", 8), Field("EXPIRED", "D", 8),
+        Field("CREATED", "D", 8), Field("UPDATED", "D", 8), Field("MUSTCHG", "C", 1),
+        Field("CATATAN", "C", 60),
+    ]
+
+    digest, salt, iterations = _password_hash(BOOTSTRAP_PASSWORD)
+    seed = [dict(
+        ID=1, USERNAME=BOOTSTRAP_USER, NAMA=BOOTSTRAP_NAME, ROLE="ADMIN",
+        PASSHASH=digest, SALT=salt, ITER=iterations, STATUS="AKTIF",
+        EXPIRED="", CREATED=BUILD_DATE.isoformat(), UPDATED=BUILD_DATE.isoformat(),
+        MUSTCHG="Y", CATATAN="Akun bootstrap; wajib ganti password",
+    )]
+
+    rows = seed
+    existing = os.path.join(DATA_DIR, "PENGGUNA.DBF")
+    if preserve and os.path.exists(existing):
+        with open(existing, "rb") as fh:
+            parsed = read_dbf(fh.read())
+        if parsed["rows"]:
+            rows = parsed["rows"]
+            print(f"  PENGGUNA: mempertahankan {len(rows)} akun dari berkas lama")
+
+    return add("PENGGUNA", "Pengguna & role",
+               "Akun login: admin/user, status aktif, tanggal kedaluwarsa, hash password PBKDF2.",
+               fields, rows)
+
+
 def build_param():
     fields = [Field("KUNCI", "C", 16), Field("NILAI", "C", 80)]
     rows = [
@@ -347,7 +397,7 @@ def write_manifest():
     print(f"  manifest.json  {len(TABLES)} tabel")
 
 
-def main(reset_transaksi=False):
+def main(reset_transaksi=False, reset_pengguna=False):
     os.makedirs(DATA_DIR, exist_ok=True)
     print(f"Bangun DBF untuk {len(M)} emiten -> {DATA_DIR}")
     build_saham()
@@ -357,6 +407,7 @@ def main(reset_transaksi=False):
     build_dividen()
     build_histori()
     build_transaksi(preserve=not reset_transaksi)
+    build_pengguna(preserve=not reset_pengguna)
     build_param()
     write_manifest()
     total = sum(t["bytes"] for t in TABLES)
@@ -370,4 +421,10 @@ if __name__ == "__main__":
         action="store_true",
         help="ganti TRANSAKSI.DBF dengan 5 contoh (default: pertahankan yang sudah ada)",
     )
-    main(reset_transaksi=parser.parse_args().reset_transaksi)
+    parser.add_argument(
+        "--reset-pengguna",
+        action="store_true",
+        help="ganti PENGGUNA.DBF dengan akun admin bootstrap (default: pertahankan akun lama)",
+    )
+    args = parser.parse_args()
+    main(reset_transaksi=args.reset_transaksi, reset_pengguna=args.reset_pengguna)

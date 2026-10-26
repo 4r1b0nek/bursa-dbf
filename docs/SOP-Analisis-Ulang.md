@@ -66,10 +66,11 @@ atau workflow Yahoo.
 - `data/` dalam kondisi terakhir sudah di-commit (atau sudah dibackup).
 - Sumber data tersedia: stockanalysis.com, laporan emiten, Kontan/CNBC/Antara/IDX Channel.
 - Portofolio sudah diekspor: **Portofolio → TRANSAKSI.DBF**.
+- Akun pengguna sudah diekspor: **Pengguna → PENGGUNA.DBF** (khusus admin).
 - Browser siap untuk verifikasi di `http://localhost:8765` atau URL GitHub Pages.
 
-> `build_dbf.py` sekarang **mempertahankan `TRANSAKSI.DBF`** yang sudah ada. Backup tetap
-> wajib untuk rollback.
+> `build_dbf.py` sekarang **mempertahankan `TRANSAKSI.DBF` dan `PENGGUNA.DBF`** yang sudah ada.
+> Backup tetap wajib untuk rollback.
 
 ## 6. Prosedur
 
@@ -171,8 +172,9 @@ SKOR          9 baris
 DIVIDEN      46 baris
 HISTORIK     90 baris
 TRANSAKSI    N baris (dipertahankan)
+PENGGUNA     N akun (dipertahankan)
 PARAM        11 baris
-Selesai: 8 tabel
+Selesai: 9 tabel
 ```
 
 Jika jumlah transaksi berubah drastis, **hentikan proses** dan pulihkan backup.
@@ -191,11 +193,12 @@ Lalu periksa manual:
 - [ ] 9 `KODE` ada di `SAHAM`, `VALUASI`, `TEKNIKAL`, `SKOR`.
 - [ ] `DIVIDEN` = 46 baris; `HISTORIK` = 90 baris.
 - [ ] `TRANSAKSI` sama dengan jumlah sebelum build.
+- [ ] `PENGGUNA` sama dengan jumlah sebelum build (akun tidak hilang).
 - [ ] Tidak ada `***` pada kolom numerik.
 - [ ] `HARGA`, `FV`, `EPS`, `BVPS` > 0.
 - [ ] `MOS = (FV - HARGA) / FV` cocok dengan `VALUASI.MOS`.
 - [ ] `PE = HARGA / EPS`, `PB = HARGA / BVPS`, `DY = DPS / HARGA`.
-- [ ] `manifest.json` mencatat 8 tabel dan `dataDate` baru.
+- [ ] `manifest.json` mencatat 9 tabel dan `dataDate` baru.
 
 ### Langkah 7 — Review
 
@@ -232,7 +235,7 @@ git push
 3. Di aplikasi: **Database → Ambil data terbaru** (transaksi dipertahankan).
 4. Periksa:
    - [ ] Footer menampilkan `Harga per … · Fundamental per <DATA_DATE>`.
-   - [ ] Jumlah baris 8 tabel benar.
+   - [ ] Jumlah baris 9 tabel benar.
    - [ ] Harga, FV, MoS, skor emiten yang diubah sesuai.
    - [ ] Portofolio masih berisi transaksi yang sama.
    - [ ] Tidak ada error di konsol browser.
@@ -293,11 +296,11 @@ Setelah rollback, lakukan hard refresh dan **Ambil data terbaru**.
 ## 10. Checklist ringkas (cetak)
 
 ```text
-[ ] Backup data + TRANSAKSI.DBF
+[ ] Backup data + TRANSAKSI.DBF + PENGGUNA.DBF
 [ ] Data fundamental & dividen diperbarui
 [ ] P, PE_FAIR, COE, TECH, ASSUME, SCORES diperbarui
 [ ] CATATAN + DATA_DATE diperbarui
-[ ] build_dbf.py dijalankan, TRANSAKSI tetap
+[ ] build_dbf.py dijalankan, TRANSAKSI & PENGGUNA tetap
 [ ] test_dbf.mjs lulus
 [ ] test_app.mjs lulus
 [ ] Cek 9 KODE, 46 DIVIDEN, 90 HISTORIK

@@ -36,13 +36,50 @@ tidak memerlukan server, build step, atau basis data tambahan.
 - **Portofolio** — jurnal beli/jual, biaya rata-rata, laba/rugi unrealized & realisasi,
   dividen tahunan, yield on cost, alokasi donat. Berbasis tabel `TRANSAKSI.DBF`.
 - **Simulasi** — proyeksi setoran bulanan dengan reinvestasi dividen, lengkap dengan IRR.
-- **Database** — penjelajah 8 tabel DBF: struktur field, header DBF, pratinjau data,
+- **Login & role** — form login, sesi 8 jam, role `ADMIN`/`USER`, status aktif, dan masa
+  berlaku akun (kedaluwarsa otomatis ditolak).
+- **Manajemen pengguna** — admin dapat membuat, mengubah, mereset password, dan
+  menonaktifkan/mengaktifkan akun. Setiap aksi sensitif diverifikasi ulang dengan password admin.
+- **Database** — penjelajah 9 tabel DBF: struktur field, header DBF, pratinjau data,
   unduh satu tabel / ZIP, impor `.DBF`, dan simpan langsung ke folder lokal.
 - **Responsif** — dipakai nyaman di desktop maupun ponsel.
 
 | Portofolio | Lembar analisis |
 | --- | --- |
 | ![Portofolio](docs/preview-portofolio.png) | ![Analisis](docs/preview-analisis.png) |
+
+## Login & hak akses
+
+<img src="docs/preview-login.png" alt="Form login Bursa DBF" width="520">
+
+Akun bootstrap: **`admin`** / **`Bursa#2026!`**. Password awalnya didefinisikan di
+[`tools/build_dbf.py`](tools/build_dbf.py) (`BOOTSTRAP_PASSWORD`) dan **wajib diganti saat login
+pertama**. Setelah itu, buat akun user lewat **Pengguna → Tambah pengguna**.
+
+| Fitur | ADMIN | USER |
+| --- | :---: | :---: |
+| Ringkasan, analisis saham, portofolio, simulasi | ✓ | ✓ |
+| Tambah/ubah transaksi portofolio | ✓ | ✓ |
+| Update harga, ekspor/impor DBF, simpan folder | ✓ | — |
+| Database browser & reset data | ✓ | — |
+| Manajemen pengguna & role | ✓ | — |
+
+Aturan akun:
+
+- Sesi login berlaku **8 jam** atau sampai tab ditutup.
+- User dengan `STATUS = NONAKTIF` atau `EXPIRED` yang sudah lewat tidak bisa login.
+- User baru dan akun bootstrap wajib mengganti password pada login pertama.
+- Admin tidak bisa menonaktifkan/menurunkan akun sendiri, dan sistem menolak menghapus admin aktif terakhir.
+- Aksi tambah/ubah/nonaktifkan pengguna meminta **password admin** sebagai verifikasi ulang.
+
+> **Penting — batas keamanan.** Aplikasi ini statis di GitHub Pages. Pemeriksaan role berjalan
+> di browser dan bisa dilewati lewat DevTools; berkas `PENGGUNA.DBF` (berisi hash PBKDF2 + salt)
+> dapat dibaca publik. Ini kontrol akses tingkat UI untuk demo/internal, **bukan** autentikasi
+> server. Jangan gunakan password penting. Untuk keamanan nyata, pindahkan login ke backend.
+>
+> Perubahan pengguna dari admin disimpan di browser (localStorage). Agar berlaku untuk semua
+> pengunjung, ekspor `PENGGUNA.DBF` lalu commit ke repositori; jika tidak, akun baru hanya ada
+> di browser admin tersebut.
 
 ## Jalankan secara lokal
 
@@ -181,7 +218,8 @@ Tabel referensi sengaja hanya-baca dari UI supaya angka model tetap konsisten. A
 
    Perintah ini menulis ulang **semua** tabel di `data/` beserta `manifest.json`.
    `TRANSAKSI.DBF` yang sudah ada **dipertahankan**; gunakan `--reset-transaksi` hanya jika
-   memang ingin mengembalikan 5 transaksi contoh.
+   memang ingin mengembalikan 5 transaksi contoh. Akun di `PENGGUNA.DBF` juga dipertahankan;
+   `--reset-pengguna` mengembalikan akun admin bootstrap.
 3. Buka aplikasi → **Database → Ambil data terbaru**. Tabel referensi dimuat ulang dari berkas
    `.DBF` baru; jurnal transaksi di browser **tetap dipertahankan**.
 4. Untuk GitHub: commit `data/*.DBF` dan `data/manifest.json`, lalu push.
@@ -198,6 +236,7 @@ Panduan cepat lokasi angka:
 | Rating, keputusan, level harga, ringkasan tesis | `tools/build_dbf.py` — dict `CATATAN` |
 | Tanggal data yang tampil di aplikasi | `tools/build_dbf.py` — `DATA_DATE` |
 | Jurnal transaksi | UI Portofolio, atau `data/TRANSAKSI.DBF` |
+| Akun, role, status, masa berlaku | UI **Pengguna**, atau `data/PENGGUNA.DBF` |
 
 ### 5. Mengedit DBF secara langsung
 
@@ -232,6 +271,7 @@ Semua tabel memakai kunci `KODE` (kecuali `PARAM`).
 | `DIVIDEN.DBF` | DPS per tahun; dividen reguler dan spesial dipisah | 46 | 4 |
 | `HISTORIK.DBF` | 10 penutupan mingguan terakhir per emiten | 90 | 4 |
 | `TRANSAKSI.DBF` | Jurnal beli/jual portofolio (dapat diedit dari UI) | 5 | 8 |
+| `PENGGUNA.DBF` | Akun login: role, status, masa berlaku, hash PBKDF2 + salt | 1 | 13 |
 | `PARAM.DBF` | Metadata: tanggal data, tanggal & sumber harga, FX, COE, disclaimer | 11 | 2 |
 
 Tipe field: `C` (teks), `N` (numerik), `D` (tanggal `YYYYMMDD`), `L` (logika).
@@ -254,13 +294,14 @@ Angka kunci pada snapshot analisis 21 Oktober 2026:
 ├── assets/
 │   ├── css/style.css           # design system
 │   └── js/
-│       ├── app.js              # routing, view, form transaksi
+│       ├── app.js              # routing, view, form transaksi, login & pengguna
+│       ├── auth.js             # sesi, PBKDF2, login, CRUD pengguna & role
 │       ├── store.js            # load DBF, localStorage, portofolio, simulasi
 │       ├── dbf.js              # pembaca & penulis DBF
 │       ├── charts.js           # grafik SVG tanpa dependensi
 │       ├── zip.js              # penulis ZIP (store) untuk ekspor
 │       └── format.js           # format angka/locale Indonesia
-├── data/                       # 8 tabel .DBF + manifest.json
+├── data/                       # 9 tabel .DBF + manifest.json
 ├── tools/
 │   ├── build_dbf.py            # regenerasi DBF dari mesin analisis (Python)
 │   ├── update_harga_live.py    # ambil harga Yahoo Finance → tulis DBF
@@ -268,6 +309,7 @@ Angka kunci pada snapshot analisis 21 Oktober 2026:
 │   ├── data.py, model.py       # dataset + model valuasi (sumber angka)
 │   ├── test_dbf.mjs            # uji roundtrip byte-identik
 │   ├── test_app.mjs            # uji join data, portofolio, simulasi, grafik
+│   ├── test_auth.mjs           # uji login, role, expiry, CRUD pengguna
 │   ├── test_zip.mjs            # membuat arsip ZIP
 │   └── test_zip.py             # validasi CRC & struktur DBF di dalam ZIP
 ├── docs/                       # tangkapan layar + SOP-Analisis-Ulang.md
@@ -290,6 +332,9 @@ node tools/test_dbf.mjs
 # uji logika aplikasi: join tabel, portofolio, simulasi, semua grafik
 node tools/test_app.mjs
 
+# uji login, role, status, expiry, dan CRUD pengguna
+node tools/test_auth.mjs
+
 # uji ZIP: buat arsip, validasi CRC + struktur DBF di dalamnya
 node tools/test_zip.mjs demo.zip
 python tools/test_zip.py demo.zip
@@ -299,8 +344,8 @@ python tools/update_harga_live.py --dry-run
 ```
 
 `build_dbf.py` juga menulis ulang `data/manifest.json` (jumlah baris, ukuran, SHA-1 singkat).
-Transaksi portofolio di `TRANSAKSI.DBF` dipertahankan; tambahkan `--reset-transaksi` hanya
-untuk kembali ke 5 contoh.
+Transaksi portofolio dan akun pengguna dipertahankan; tambahkan `--reset-transaksi` /
+`--reset-pengguna` hanya untuk mengembalikan data contoh.
 
 ## Kompatibilitas
 

@@ -41,7 +41,7 @@ const check = (label, cond, extra = "") => {
 };
 
 await DB.init();
-check("manifest & tabel dimuat", DB.state.order.length === 8, DB.state.order.join(","));
+check("manifest & tabel dimuat", DB.state.order.length === 9, DB.state.order.join(","));
 
 const stocks = DB.stockList();
 check("join 9 emiten", stocks.length === 9);
@@ -110,7 +110,7 @@ const imported = DB.importDbf("SKOR.DBF", skorBuf.buffer.slice(skorBuf.byteOffse
 check("impor DBF mengganti tabel", imported.name === "SKOR" && imported.records === 9, `${imported.name} ${imported.records}`);
 
 const reloaded = await DB.reloadReference();
-check("reload referensi mempertahankan transaksi", reloaded.tables === 8 && reloaded.transactions === initialTx + 1, `${reloaded.tables} tabel / ${reloaded.transactions} transaksi`);
+check("reload referensi mempertahankan transaksi", reloaded.tables === 9 && reloaded.transactions === initialTx + 1, `${reloaded.tables} tabel / ${reloaded.transactions} transaksi`);
 check("reload referensi memperbarui saham", DB.rows("SAHAM").length === 9 && DB.rows("SAHAM").some((r) => r.KODE === "BJBR"));
 
 const testPrice = 4321;
