@@ -121,6 +121,14 @@ export async function adminPortfolios() {
   return request("/api/admin/portfolios");
 }
 
+export async function listLogBulan() {
+  return request("/api/log-bulan");
+}
+
+export async function uploadLogBulan(rows) {
+  return request("/api/admin/log-bulan", { method: "POST", body: { rows } });
+}
+
 export async function createUser(payload) {
   return request("/api/users", { method: "POST", body: payload });
 }

@@ -369,6 +369,51 @@ async function adminPortfolios(request, env) {
   }, 200, request, env);
 }
 
+/* ------------------------------------------------------------ log bulanan */
+async function listLogBulan(request, env) {
+  const rows = await env.DB.prepare("SELECT * FROM LOG_BULAN ORDER BY BULAN DESC").all();
+  return json({ rows: rows.results || [] }, 200, request, env);
+}
+
+async function uploadLogBulan(request, env, user) {
+  const body = await readJson(request);
+  const rows = Array.isArray(body?.rows) ? body.rows : [];
+  if (!rows.length || rows.length > 120) {
+    return json({ error: "Kirim 1–120 baris log bulanan." }, 400, request, env);
+  }
+  const normalized = [];
+  for (const row of rows) {
+    const bulan = String(row?.BULAN || "").trim();
+    const tgl = String(row?.TGL || "").trim();
+    if (!/^\d{4}-\d{2}$/.test(bulan)) return json({ error: `Bulan tidak valid: ${bulan || "(kosong)"}` }, 400, request, env);
+    if (!validateDate(tgl)) return json({ error: `Tanggal tidak valid untuk ${bulan}.` }, 400, request, env);
+    const num = (v) => (v === null || v === undefined || v === "" ? null : Number(v));
+    normalized.push({
+      BULAN: bulan,
+      TGL: tgl,
+      IHSG: num(row.IHSG),
+      YIELD: num(row.YIELD),
+      MOS: num(row.MOS),
+      JML_MURAH: num(row.JML_MURAH) ?? 0,
+      JML_BUY: num(row.JML_BUY) ?? 0,
+      SKOR: num(row.SKOR),
+      CATATAN: String(row.CATATAN || "").slice(0, 120),
+    });
+  }
+
+  const statements = normalized.map((r) => env.DB.prepare(
+    `INSERT INTO LOG_BULAN (BULAN, TGL, IHSG, YIELD, MOS, JML_MURAH, JML_BUY, SKOR, CATATAN, CREATED_AT, CREATED_BY)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(BULAN) DO UPDATE SET
+       TGL = excluded.TGL, IHSG = excluded.IHSG, YIELD = excluded.YIELD, MOS = excluded.MOS,
+       JML_MURAH = excluded.JML_MURAH, JML_BUY = excluded.JML_BUY, SKOR = excluded.SKOR,
+       CATATAN = excluded.CATATAN, CREATED_AT = excluded.CREATED_AT, CREATED_BY = excluded.CREATED_BY`
+  ).bind(r.BULAN, r.TGL || null, r.IHSG, r.YIELD, r.MOS, r.JML_MURAH, r.JML_BUY, r.SKOR, r.CATATAN, today(), user.ID));
+  await env.DB.batch(statements);
+  const result = await env.DB.prepare("SELECT * FROM LOG_BULAN ORDER BY BULAN DESC").all();
+  return json({ rows: result.results || [], uploaded: normalized.length }, 200, request, env);
+}
+
 async function createUser(request, env) {
   const body = await readJson(request);
   const usernameError = validateUsername(body?.username);
@@ -588,6 +633,11 @@ export default {
       if (url.pathname === "/api/me" && request.method === "GET") return await me(request, env, user);
       if (url.pathname === "/api/me/password" && request.method === "POST") return await changePassword(request, env, user);
       if (url.pathname === "/api/bootstrap" && request.method === "GET") return await bootstrap(request, env, user);
+      if (url.pathname === "/api/log-bulan" && request.method === "GET") return await listLogBulan(request, env);
+      if (url.pathname === "/api/admin/log-bulan" && request.method === "POST") {
+        if (String(user.ROLE).toUpperCase() !== "ADMIN") return json({ error: "Hanya administrator." }, 403, request, env);
+        return await uploadLogBulan(request, env, user);
+      }
       if (url.pathname.startsWith("/api/transactions")
         && String(user.ROLE).toUpperCase() === "ADMIN"
         && request.method !== "GET") {

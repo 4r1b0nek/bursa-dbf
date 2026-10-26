@@ -41,6 +41,8 @@ tidak memerlukan server, build step, atau basis data tambahan.
   berlaku akun (kedaluwarsa otomatis ditolak).
 - **Manajemen pengguna** — admin dapat membuat, mengubah, mereset password, dan
   menonaktifkan/mengaktifkan akun. Setiap aksi sensitif diverifikasi ulang dengan password admin.
+- **Log bulanan** — admin mengunggah file `LOG_BULAN.DBF`; seluruh user dapat melihat
+  riwayat IHSG, yield, MoS, jumlah saham murah/buy, skor, dan catatan per bulan.
 - **Database** — penjelajah 9 tabel DBF: struktur field, header DBF, pratinjau data,
   unduh satu tabel / ZIP, impor `.DBF`, dan simpan langsung ke folder lokal.
 - **Responsif** — dipakai nyaman di desktop maupun ponsel.
@@ -88,7 +90,7 @@ Aturan akun:
 Tersedia backend terpisah di **Cloudflare Worker + D1**:
 
 - API: https://bursa-dbf-api.agus-asarry.workers.dev
-- Database: D1 `bursa-dbf` (SQLite, region APAC), 9 tabel, 190 baris data awal.
+- Database: D1 `bursa-dbf` (SQLite, region APAC), 10 tabel, 191 baris data awal.
 - Browser hanya memanggil `/api/*`; file DBF dan nama tabel tidak dikirim ke browser.
 - Login, role, expiry, dan CRUD pengguna diperiksa di server.
 - Kode, skema, dan panduan deploy: [`cloudflare/README.md`](cloudflare/README.md).
@@ -312,7 +314,7 @@ Angka kunci pada snapshot analisis 21 Oktober 2026:
 │       ├── charts.js           # grafik SVG tanpa dependensi
 │       ├── zip.js              # penulis ZIP (store) untuk ekspor
 │       └── format.js           # format angka/locale Indonesia
-├── data/                       # 9 tabel .DBF + manifest.json
+├── data/                       # 10 berkas .DBF (9 manifest + LOG_BULAN) + manifest.json
 ├── tools/
 │   ├── build_dbf.py            # regenerasi DBF dari mesin analisis (Python)
 │   ├── update_harga_live.py    # ambil harga Yahoo Finance → tulis DBF

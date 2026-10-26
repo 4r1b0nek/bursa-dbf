@@ -27,6 +27,7 @@ const API_LABELS = {
   HISTORIK: ["Historik harga", "Harga mingguan 10 minggu."],
   TRANSAKSI: ["Jurnal transaksi", "Transaksi portofolio pengguna."],
   PENGGUNA: ["Pengguna", "Akun, role, status, dan masa berlaku."],
+  LOG_BULAN: ["Log bulanan", "Catatan analisis pasar per bulan."],
   PARAM: ["Parameter", "Metadata aplikasi dan sumber harga."],
 };
 
@@ -45,6 +46,7 @@ export const state = {
   autoRefreshed: false,
   adminUsers: [],
   adminTransactions: [],
+  logBulan: [],
   listeners: new Set(),
 };
 
@@ -143,10 +145,11 @@ export async function loadApi(payload = null) {
     HISTORIK: apiTable("HISTORIK", data.history || []),
     TRANSAKSI: apiTable("TRANSAKSI", data.transactions || []),
     PENGGUNA: previousUsers || apiTable("PENGGUNA", []),
+    LOG_BULAN: apiTable("LOG_BULAN", state.logBulan || []),
     PARAM: apiTable("PARAM", paramRows),
   };
   state.tables = tables;
-  state.order = ["SAHAM", "VALUASI", "TEKNIKAL", "SKOR", "DIVIDEN", "HISTORIK", "TRANSAKSI", "PENGGUNA", "PARAM"];
+  state.order = ["SAHAM", "VALUASI", "TEKNIKAL", "SKOR", "DIVIDEN", "HISTORIK", "TRANSAKSI", "PENGGUNA", "LOG_BULAN", "PARAM"];
   state.manifest = {
     app: "Bursa DBF",
     version: "api-v1",
@@ -193,6 +196,27 @@ export function clearAdminPortfolios() {
 export function adminTransactionsFor(userId) {
   const id = Number(userId);
   return state.adminTransactions.filter((tx) => Number(tx.USER_ID) === id);
+}
+
+/** Log analisis bulanan dari D1. */
+export async function loadLogBulan() {
+  if (!apiMode) {
+    state.logBulan = [];
+    return [];
+  }
+  const data = await API.listLogBulan();
+  state.logBulan = data.rows || [];
+  state.tables.LOG_BULAN = apiTable("LOG_BULAN", state.logBulan);
+  if (!state.order.includes("LOG_BULAN")) state.order.push("LOG_BULAN");
+  emit();
+  return state.logBulan;
+}
+
+export function setLogBulan(rows) {
+  state.logBulan = rows || [];
+  state.tables.LOG_BULAN = apiTable("LOG_BULAN", state.logBulan);
+  if (!state.order.includes("LOG_BULAN")) state.order.push("LOG_BULAN");
+  emit();
 }
 
 /** Cache pengguna dari /api/users untuk halaman admin. */

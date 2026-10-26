@@ -6,6 +6,7 @@ import * as DB from "./store.js";
 import * as C from "./charts.js";
 import * as Auth from "./auth.js";
 import * as API from "./api.js";
+import { parseDbf } from "./dbf.js";
 import {
   esc, num, rupiah, compactRp, pct, pctRaw, signClass, dateID, bytes as fmtBytes,
   isNum, mean, clamp,
@@ -257,6 +258,7 @@ async function startApp() {
   try {
     if (DB.apiMode) {
       await DB.loadApi();
+      await DB.loadLogBulan();
       if (Auth.isAdmin()) {
         await Auth.loadUsers();
         await DB.loadAdminPortfolios();
@@ -332,7 +334,7 @@ function route() {
   }
   const raw = (location.hash || "#/ringkasan").replace(/^#\/?/, "");
   const [viewRaw, paramRaw] = raw.split("/");
-  const view = ["ringkasan", "saham", "portofolio", "simulasi", "database", "pengguna"].includes(viewRaw)
+  const view = ["ringkasan", "saham", "portofolio", "simulasi", "log-bulan", "database", "pengguna"].includes(viewRaw)
     ? viewRaw : "ringkasan";
   if (view === "database" && DB.apiMode) {
     location.hash = "#/ringkasan";
@@ -362,6 +364,7 @@ function viewTitle(view) {
     saham: "Analisis saham",
     portofolio: "Portofolio",
     simulasi: "Simulasi investasi",
+    "log-bulan": "Log analisis bulanan",
     database: "Database DBF",
     pengguna: "Manajemen pengguna",
   }[view] || "Bursa DBF";
@@ -373,6 +376,7 @@ function render() {
     saham: viewStocks,
     portofolio: viewPortfolio,
     simulasi: viewSimulation,
+    "log-bulan": viewLogBulan,
     database: viewDatabase,
     pengguna: viewUsers,
   };
@@ -431,6 +435,10 @@ function afterRender() {
   if (ui.view === "database") {
     const input = document.getElementById("import-input");
     if (input) input.addEventListener("change", () => importFiles(input));
+  }
+  if (ui.view === "log-bulan") {
+    const input = document.getElementById("log-upload-input");
+    if (input) input.onchange = handleLogUpload;
   }
 }
 
@@ -1066,6 +1074,89 @@ function viewPortfolio() {
   </div>`;
 }
 
+/* ------------------------------------------------------------------ log bulanan */
+function viewLogBulan() {
+  if (!DB.apiMode) {
+    return `<div class="card">${emptyState("Log bulanan tersedia di mode D1",
+      "Buka aplikasi tanpa ?mode=dbf untuk memakai log analisis dari Cloudflare D1.", "", "")}</div>`;
+  }
+  const rows = (DB.state.logBulan || []).slice()
+    .sort((a, b) => String(b.BULAN).localeCompare(String(a.BULAN)));
+  const latest = rows[0];
+  const actions = Auth.isAdmin()
+    ? `<div class="wrap-gap">
+        <button class="btn btn-primary" data-action="log-upload">${icon("database")} Upload DBF</button>
+        <input id="log-upload-input" type="file" accept=".dbf" hidden>
+      </div>`
+    : "";
+  const kpis = latest
+    ? `<section class="grid grid-4 section">
+        ${kpi("IHSG", num(latest.IHSG, 2), dateID(latest.TGL), "chart", "rgba(15,118,110,.14)")}
+        ${kpi("Dividend yield", `${num(latest.YIELD, 2)}%`, "Rata-rata 9 emiten", "percent", "rgba(14,165,233,.12)")}
+        ${kpi("Margin of safety", `${num(latest.MOS, 2)}%`, "Rata-rata", "shield", "rgba(4,120,87,.14)")}
+        ${kpi("Skor analisis", num(latest.SKOR, 1), `${num(latest.JML_MURAH, 0)} murah · ${num(latest.JML_BUY, 0)} buy`, "layers", "rgba(180,83,9,.13)")}
+      </section>`
+    : "";
+  const tableRows = rows.map((row) => `<tr>
+    <td class="mono strong">${esc(row.BULAN)}</td>
+    <td class="nowrap">${row.TGL ? dateID(row.TGL) : "—"}</td>
+    <td class="num">${num(row.IHSG, 2)}</td>
+    <td class="num">${num(row.YIELD, 2)}%</td>
+    <td class="num">${num(row.MOS, 2)}%</td>
+    <td class="num">${num(row.JML_MURAH, 0)}</td>
+    <td class="num">${num(row.JML_BUY, 0)}</td>
+    <td class="num">${num(row.SKOR, 1)}</td>
+    <td class="small muted">${esc(row.CATATAN || "—")}</td>
+  </tr>`).join("");
+
+  return `
+  ${sectionHead("Log analisis bulanan",
+    "Catatan kondisi pasar dan hasil analisis per bulan. Admin dapat mengunggah DBF; semua user dapat melihat.",
+    actions)}
+  ${kpis}
+  <div class="card flush">
+    <div class="card-head" style="padding:18px 20px 0">
+      <div><h3>Riwayat bulanan</h3><p>${rows.length} bulan tersimpan di D1.</p></div>
+      <span class="chip brand">${Auth.isAdmin() ? "ADMIN UPLOAD" : "READ-ONLY"}</span>
+    </div>
+    <div class="table-wrap mt-2">
+      <table class="data">
+        <thead><tr><th>Bulan</th><th>Tanggal</th><th class="num">IHSG</th><th class="num">Yield</th><th class="num">MoS</th>
+        <th class="num">Murah</th><th class="num">Buy</th><th class="num">Skor</th><th>Catatan</th></tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="9" class="muted center" style="padding:28px">Belum ada log bulanan.</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+async function handleLogUpload(event) {
+  const input = event.target;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  try {
+    const parsed = parseDbf(await file.arrayBuffer());
+    if (!parsed.rows.length) throw new Error("File DBF tidak berisi data.");
+    const rows = parsed.rows.map((row) => ({
+      BULAN: row.BULAN,
+      TGL: row.TGL,
+      IHSG: row.IHSG,
+      YIELD: row.YIELD,
+      MOS: row.MOS,
+      JML_MURAH: row.JML_MURAH,
+      JML_BUY: row.JML_BUY,
+      SKOR: row.SKOR,
+      CATATAN: row.CATATAN,
+    }));
+    const result = await API.uploadLogBulan(rows);
+    DB.setLogBulan(result.rows || []);
+    toast(`${result.uploaded || rows.length} baris log diunggah ke D1`);
+    refresh();
+  } catch (err) {
+    toast(`Gagal upload: ${err.message}`, "err");
+  }
+}
+
 /* ------------------------------------------------------------------ pengguna */
 const USER_STATUS = {
   AKTIF: ["aktif", "Aktif"],
@@ -1432,7 +1523,7 @@ async function onClick(e) {
   const action = el.dataset.action;
   const adminOnly = new Set([
     "price-editor", "price-refresh", "export-table", "export-all", "reload-reference", "save-folder",
-    "import", "select-table", "toggle-show-all", "reset-db", "portfolio-refresh",
+    "import", "select-table", "toggle-show-all", "reset-db", "portfolio-refresh", "log-upload",
     "user-add", "user-edit", "user-toggle",
   ]);
   if (adminOnly.has(action) && !requireAdmin()) return;
@@ -1495,6 +1586,10 @@ async function onClick(e) {
   }
   if (action === "tx-add") {
     openTxModal({ code: el.dataset.code || null });
+    return;
+  }
+  if (action === "log-upload") {
+    document.getElementById("log-upload-input")?.click();
     return;
   }
   if (action === "portfolio-refresh") {

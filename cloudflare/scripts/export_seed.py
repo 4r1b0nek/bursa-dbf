@@ -19,7 +19,7 @@ DEFAULT_OUT = os.path.join(ROOT, "cloudflare", "seed.sql")
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 from dbf_writer import read_dbf  # noqa: E402
 
-TABLES = ["SAHAM", "VALUASI", "TEKNIKAL", "SKOR", "DIVIDEN", "HISTORIK", "PARAM", "TRANSAKSI"]
+TABLES = ["SAHAM", "VALUASI", "TEKNIKAL", "SKOR", "DIVIDEN", "HISTORIK", "PARAM", "LOG_BULAN", "TRANSAKSI"]
 # PENGGUNA sengaja tidak diekspor: seed data tidak boleh menimpa akun/password D1.
 # Akun admin dikelola lewat API /api/users atau SQL manual.
 
