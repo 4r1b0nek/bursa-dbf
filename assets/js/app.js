@@ -177,7 +177,7 @@ async function boot() {
 }
 
 /* ------------------------------------------------------------------ auth UI */
-function showLogin(message = "") {
+function showLogin(message = "", tone = "error") {
   document.body.classList.add("auth-locked");
   const box = document.getElementById("user-box");
   if (box) box.hidden = true;
@@ -195,7 +195,7 @@ function showLogin(message = "") {
         <h1>Masuk ke aplikasi</h1>
         <p class="auth-lede">Gunakan akun yang diberikan administrator. Sesi berlaku
         ${Auth.SESSION_HOURS} jam dan berakhir saat tab ditutup.</p>
-        <div class="auth-error${message ? " show" : ""}" id="login-error">${esc(message)}</div>
+        <div class="auth-error${message ? " show" : ""}${tone === "info" ? " notice" : ""}" id="login-error">${esc(message)}</div>
         <form id="login-form" autocomplete="on" novalidate>
           <div class="field">
             <label for="login-user">Username</label>
@@ -1534,12 +1534,16 @@ async function onClick(e) {
   }
 
   if (action === "logout") {
+    openLogoutModal();
+    return;
+  }
+  if (action === "logout-confirm") {
     Auth.logout();
     closeDrawer(false);
     closeModal(true);
     ui.detail = null;
     history.replaceState(null, "", "#/ringkasan");
-    showLogin("Anda telah keluar.");
+    showLogin("Anda telah keluar. Sampai jumpa.", "info");
     return;
   }
   if (action === "change-password") {
@@ -1801,6 +1805,29 @@ function modalShell({ title, subtitle, body, footer, width = "560px", id = "moda
         <div class="modal-foot">${footer}</div>
       </div>
     </div>`;
+}
+
+function openLogoutModal() {
+  const user = Auth.currentUser();
+  if (!user) return showLogin("Sesi berakhir. Silakan login kembali.");
+  modalRoot().innerHTML = modalShell({
+    title: "Keluar dari aplikasi?",
+    subtitle: `Sesi ${esc(user.NAMA || user.USERNAME)} akan diakhiri.`,
+    width: "460px",
+    id: "logout-title",
+    body: `<div class="modal-body">
+      <div class="callout">${icon("shield")}
+        <div><b>Data sudah tersimpan.</b> Transaksi dan pengaturan disimpan di D1.
+        Anda perlu login kembali untuk membuka aplikasi.</div>
+      </div>
+    </div>`,
+    footer: `<button class="btn btn-ghost" type="button" data-action="close-modal">Batal</button>
+      <div class="right"><button class="btn btn-danger" type="button" data-action="logout-confirm">${icon("power")} Ya, keluar</button></div>`,
+  });
+  document.body.classList.add("no-scroll");
+  const overlay = modalRoot().querySelector(".modal-overlay");
+  overlay.addEventListener("mousedown", (ev) => { if (ev.target === overlay) closeModal(); });
+  setTimeout(() => modalRoot().querySelector('[data-action="logout-confirm"]')?.focus(), 60);
 }
 
 function openChangePasswordModal({ forced = false } = {}) {
