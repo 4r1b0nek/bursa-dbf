@@ -358,6 +358,17 @@ async function listUsers(request, env) {
   return json({ users: (rows.results || []).map(publicUser) }, 200, request, env);
 }
 
+async function adminPortfolios(request, env) {
+  const users = await env.DB.prepare("SELECT * FROM PENGGUNA ORDER BY USERNAME").all();
+  const tx = await env.DB.prepare(
+    "SELECT T.*, P.USERNAME, P.NAMA FROM TRANSAKSI T JOIN PENGGUNA P ON P.ID = T.USER_ID ORDER BY T.USER_ID, T.TANGGAL, T.ID"
+  ).all();
+  return json({
+    users: (users.results || []).map(publicUser),
+    transactions: tx.results || [],
+  }, 200, request, env);
+}
+
 async function createUser(request, env) {
   const body = await readJson(request);
   const usernameError = validateUsername(body?.username);
@@ -577,6 +588,15 @@ export default {
       if (url.pathname === "/api/me" && request.method === "GET") return await me(request, env, user);
       if (url.pathname === "/api/me/password" && request.method === "POST") return await changePassword(request, env, user);
       if (url.pathname === "/api/bootstrap" && request.method === "GET") return await bootstrap(request, env, user);
+      if (url.pathname.startsWith("/api/transactions")
+        && String(user.ROLE).toUpperCase() === "ADMIN"
+        && request.method !== "GET") {
+        return json({ error: "Admin hanya dapat melihat portofolio user, bukan mengubahnya." }, 403, request, env);
+      }
+      if (url.pathname === "/api/admin/portfolios" && request.method === "GET") {
+        if (String(user.ROLE).toUpperCase() !== "ADMIN") return json({ error: "Hanya administrator." }, 403, request, env);
+        return await adminPortfolios(request, env);
+      }
       if (url.pathname === "/api/transactions" && request.method === "GET") return await listTransactions(request, env, user);
       if (url.pathname === "/api/transactions" && request.method === "POST") return await createTransaction(request, env, user);
       if (url.pathname === "/api/transactions" && request.method === "DELETE") return await clearTransactions(request, env, user);

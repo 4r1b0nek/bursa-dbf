@@ -117,6 +117,10 @@ export async function listUsers() {
   return request("/api/users");
 }
 
+export async function adminPortfolios() {
+  return request("/api/admin/portfolios");
+}
+
 export async function createUser(payload) {
   return request("/api/users", { method: "POST", body: payload });
 }

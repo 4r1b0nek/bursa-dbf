@@ -63,6 +63,7 @@ const ui = {
   detail: null,
   dbTable: "SAHAM",
   showAll: false,
+  portfolioUser: "all",
   sim: null,
   txEditing: null,
   forceModal: false,
@@ -256,7 +257,12 @@ async function startApp() {
   try {
     if (DB.apiMode) {
       await DB.loadApi();
-      if (Auth.isAdmin()) await Auth.loadUsers();
+      if (Auth.isAdmin()) {
+        await Auth.loadUsers();
+        await DB.loadAdminPortfolios();
+      } else {
+        DB.clearAdminPortfolios();
+      }
     }
     ui.sim = DB.simulationDefaults();
     route();
@@ -293,6 +299,12 @@ function requireAdmin() {
 
 function bindGlobal() {
   document.addEventListener("click", onClick);
+  document.addEventListener("change", (e) => {
+    const select = e.target.closest?.('[data-action="portfolio-filter"]');
+    if (!select) return;
+    ui.portfolioUser = select.value;
+    render();
+  });
   document.getElementById("skip-link")?.addEventListener("click", (e) => {
     e.preventDefault();
     mainEl().focus({ preventScroll: true });
@@ -836,8 +848,83 @@ function closeDrawer(updateHash = true) {
 }
 
 /* ------------------------------------------------------------------ portofolio */
+function portfolioUserFilter(users, value) {
+  return `<div class="wrap-gap">
+    <label class="field" style="margin:0;min-width:220px">
+      <span>Filter user</span>
+      <select id="portfolio-user-filter" data-action="portfolio-filter">
+        <option value="all" ${value === "all" ? "selected" : ""}>Semua user</option>
+        ${users.map((u) => `<option value="${u.id}" ${String(u.id) === String(value) ? "selected" : ""}>${esc(u.name)} (${esc(u.username)})</option>`).join("")}
+      </select>
+    </label>
+    <button class="btn btn-ghost btn-sm" data-action="portfolio-refresh">${icon("refresh")} Muat ulang</button>
+  </div>`;
+}
+
+function viewAdminPortfolioSummary() {
+  const users = DB.state.adminUsers || [];
+  const rows = users.map((u) => {
+    const p = DB.computePortfolio(DB.adminTransactionsFor(u.id));
+    return { user: u, p };
+  });
+  const totalValue = rows.reduce((a, r) => a + r.p.totals.value, 0);
+  const totalCost = rows.reduce((a, r) => a + r.p.totals.cost, 0);
+  const totalPnl = totalValue - totalCost;
+  const tableRows = rows.map(({ user, p }) => `<tr>
+    <td><div class="who"><b>${esc(user.name)}</b><small>${esc(user.username)} · ${esc(user.role)}</small></div></td>
+    <td class="num">${p.positions.length}</td>
+    <td class="num">${p.transactions.length}</td>
+    <td class="num strong">${compactRp(p.totals.value)}</td>
+    <td class="num">${compactRp(p.totals.cost)}</td>
+    <td class="num ${signClass(p.totals.pnl)}">${compactRp(p.totals.pnl)}<div class="tiny">${pct(p.totals.pnlPct, 1, true)}</div></td>
+    <td class="num">${compactRp(p.totals.dividend)}</td>
+  </tr>`).join("");
+
+  return `
+  ${sectionHead("Portofolio semua user",
+    "Admin dapat melihat seluruh portofolio user. Perubahan transaksi hanya dapat dilakukan oleh user pemiliknya.",
+    portfolioUserFilter(users, "all"))}
+  <div class="auth-banner">${icon("shield")}
+    <div><b>Mode baca-saja.</b> Admin tidak dapat menambah, mengubah, atau menghapus transaksi portofolio siapa pun.</div>
+  </div>
+  <section class="grid grid-4 section">
+    ${kpi("Total nilai pasar", compactRp(totalValue), `${rows.filter((r) => r.p.positions.length).length} user berposisi`, "wallet", "rgba(15,118,110,.14)")}
+    ${kpi("Total modal", compactRp(totalCost), `${users.length} akun`, "coins", "rgba(14,165,233,.12)")}
+    ${kpi("Laba/rugi", compactRp(totalPnl), pct(totalCost ? totalPnl / totalCost : null, 1, true), "chart", "rgba(4,120,87,.14)")}
+    ${kpi("Total transaksi", num(rows.reduce((a, r) => a + r.p.transactions.length, 0), 0), "Seluruh user", "layers", "rgba(180,83,9,.13)")}
+  </section>
+  <div class="card flush">
+    <div class="card-head" style="padding:18px 20px 0">
+      <div><h3>Ringkasan per user</h3><p>Pilih user pada filter untuk melihat rincian portofolionya.</p></div>
+      <span class="chip brand">READ-ONLY</span>
+    </div>
+    <div class="table-wrap mt-2">
+      <table class="data">
+        <thead><tr><th>User</th><th class="num">Posisi</th><th class="num">Transaksi</th><th class="num">Nilai</th><th class="num">Modal</th><th class="num">P/L</th><th class="num">Dividen</th></tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="7" class="muted center" style="padding:28px">Belum ada user.</td></tr>`}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function viewPortfolio() {
-  const p = DB.computePortfolio();
+  const adminView = Auth.isAdmin() && DB.apiMode;
+  const filter = adminView ? String(ui.portfolioUser || "all") : "me";
+  const users = adminView ? (DB.state.adminUsers || []) : [];
+  const selectedUser = adminView && filter !== "all"
+    ? users.find((u) => String(u.id) === String(filter))
+    : null;
+  if (adminView && filter !== "all" && !selectedUser) {
+    ui.portfolioUser = "all";
+    return viewAdminPortfolioSummary();
+  }
+  if (adminView && !selectedUser) return viewAdminPortfolioSummary();
+
+  const sourceTx = adminView
+    ? DB.adminTransactionsFor(selectedUser.id)
+    : DB.rows("TRANSAKSI");
+  const p = DB.computePortfolio(sourceTx);
+  const readOnly = adminView;
   const hasPositions = p.positions.length > 0;
   const soldOut = !hasPositions && p.transactions.length > 0;
   const colors = C.DONUT_COLORS;
@@ -854,10 +941,12 @@ function viewPortfolio() {
     </section>`;
 
   const holdings = !hasPositions
-    ? `<div class="card">${emptyState(soldOut ? "Semua posisi sudah ditutup" : "Portofolio masih kosong",
-        soldOut ? "Transaksi jual tercatat, tetapi tidak ada lot tersisa. Tambahkan pembelian baru untuk memulai posisi."
-                : "Catat transaksi beli pertama Anda. Perhitungan memakai metode biaya rata-rata dan lot 100 lembar.",
-        "Tambah transaksi", "tx-add")}</div>`
+    ? `<div class="card">${emptyState(
+        readOnly ? "Belum ada portofolio" : soldOut ? "Semua posisi sudah ditutup" : "Portofolio masih kosong",
+        readOnly ? "User ini belum memiliki transaksi portofolio."
+                 : soldOut ? "Transaksi jual tercatat, tetapi tidak ada lot tersisa. Tambahkan pembelian baru untuk memulai posisi."
+                 : "Catat transaksi beli pertama Anda. Perhitungan memakai metode biaya rata-rata dan lot 100 lembar.",
+        readOnly ? "" : "Tambah transaksi", "tx-add")}</div>`
     : `<div class="card flush">
         <div class="card-head" style="padding:18px 20px 0">
           <div><h3>Kepemilikan</h3><p>Harga pasar dari tabel SAHAM · biaya rata-rata termasuk fee beli.</p></div>
@@ -920,21 +1009,29 @@ function viewPortfolio() {
           <td class="num strong">${rupiah(total)}</td>
           <td class="small muted preview-cell" title="${esc(tx.CATATAN || "")}">${esc(tx.CATATAN || "—")}</td>
           <td class="num nowrap">
+            ${readOnly ? `<span class="small muted">—</span>` : `
             <button class="btn btn-ghost btn-icon btn-sm" data-action="tx-edit" data-index="${tx._index}" aria-label="Ubah transaksi">${icon("edit")}</button>
-            <button class="btn btn-ghost btn-icon btn-sm" data-action="tx-del" data-index="${tx._index}" aria-label="Hapus transaksi">${icon("trash")}</button>
+            <button class="btn btn-ghost btn-icon btn-sm" data-action="tx-del" data-index="${tx._index}" aria-label="Hapus transaksi">${icon("trash")}</button>`}
           </td>
         </tr>`;
       }).join("")
-    : `<tr><td colspan="9" class="muted center" style="padding:28px">Belum ada transaksi. Catat pembelian pertama Anda.</td></tr>`;
+    : `<tr><td colspan="9" class="muted center" style="padding:28px">${readOnly ? "User ini belum memiliki transaksi." : "Belum ada transaksi. Catat pembelian pertama Anda."}</td></tr>`;
 
-  return `
-  ${sectionHead("Portofolio", DB.apiMode
+  const title = adminView ? "Portofolio user" : "Portofolio";
+  const subtitle = adminView
+    ? `Portofolio ${esc(selectedUser.name)} (${esc(selectedUser.username)}) · hanya baca. Filter user untuk berpindah portofolio.`
+    : DB.apiMode
       ? "Dihitung dari jurnal transaksi Anda di D1 dengan metode biaya rata-rata (1 lot = 100 lembar)."
-      : "Dihitung dari tabel TRANSAKSI.DBF dengan metode biaya rata-rata (1 lot = 100 lembar).",
-    `<div class="wrap-gap">
+      : "Dihitung dari tabel TRANSAKSI.DBF dengan metode biaya rata-rata (1 lot = 100 lembar).";
+  const actions = adminView
+    ? portfolioUserFilter(users, filter)
+    : `<div class="wrap-gap">
       <button class="btn btn-primary" data-action="tx-add">${icon("plus")} Tambah transaksi</button>
       ${Auth.isAdmin() && !DB.apiMode ? `<button class="btn btn-ghost" data-action="export-table" data-name="TRANSAKSI">${icon("download")} TRANSAKSI.DBF</button>` : ""}
-    </div>`)}
+    </div>`;
+
+  return `
+  ${sectionHead(title, subtitle, actions)}
   ${kpis}
   <section class="grid grid-2-1">
     ${holdings}
@@ -944,7 +1041,7 @@ function viewPortfolio() {
   <section class="card flush section">
     <div class="card-head" style="padding:18px 20px 0">
       <div><h3>Jurnal transaksi</h3><p>${p.transactions.length} baris tersimpan ${DB.apiMode ? "di D1" : "di TRANSAKSI.DBF"}${DB.state.dirty ? " · ada perubahan lokal" : ""}.</p></div>
-      <button class="btn btn-ghost btn-sm" data-action="tx-clear">${icon("trash")} Hapus semua</button>
+      ${readOnly ? `<span class="chip brand">READ-ONLY</span>` : `<button class="btn btn-ghost btn-sm" data-action="tx-clear">${icon("trash")} Hapus semua</button>`}
     </div>
     <div class="table-wrap mt-2">
       <table class="data">
@@ -957,13 +1054,15 @@ function viewPortfolio() {
   </section>
 
   <div class="callout mt-3">${icon("database")}
-    <div><b>Penyimpanan.</b> ${DB.apiMode
-      ? "Transaksi disimpan di Cloudflare D1 atas nama akun Anda dan langsung tersedia di perangkat lain."
-      : `Setiap perubahan langsung disimpan di penyimpanan browser agar tidak hilang saat dimuat ulang.
-         ${Auth.isAdmin()
-           ? `Agar berkas <span class="mono">TRANSAKSI.DBF</span> ikut berubah, gunakan <b>Unduh .DBF</b> atau
-              <a href="#/database">Simpan ke folder</a> di halaman Database.`
-           : "Hubungi administrator untuk menyimpan perubahan ini ke berkas DBF."}`}</div>
+    <div><b>Penyimpanan.</b> ${readOnly
+      ? "Mode admin: portofolio user hanya dapat dilihat. Hanya user pemilik akun yang dapat menambah, mengubah, atau menghapus transaksi."
+      : DB.apiMode
+        ? "Transaksi disimpan di Cloudflare D1 atas nama akun Anda dan langsung tersedia di perangkat lain."
+        : `Setiap perubahan langsung disimpan di penyimpanan browser agar tidak hilang saat dimuat ulang.
+           ${Auth.isAdmin()
+             ? `Agar berkas <span class="mono">TRANSAKSI.DBF</span> ikut berubah, gunakan <b>Unduh .DBF</b> atau
+                <a href="#/database">Simpan ke folder</a> di halaman Database.`
+             : "Hubungi administrator untuk menyimpan perubahan ini ke berkas DBF."}`}</div>
   </div>`;
 }
 
@@ -1333,7 +1432,7 @@ async function onClick(e) {
   const action = el.dataset.action;
   const adminOnly = new Set([
     "price-editor", "price-refresh", "export-table", "export-all", "reload-reference", "save-folder",
-    "import", "select-table", "toggle-show-all", "reset-db",
+    "import", "select-table", "toggle-show-all", "reset-db", "portfolio-refresh",
     "user-add", "user-edit", "user-toggle",
   ]);
   if (adminOnly.has(action) && !requireAdmin()) return;
@@ -1390,8 +1489,25 @@ async function onClick(e) {
     render();
     return;
   }
+  if (DB.apiMode && Auth.isAdmin() && ["tx-add", "tx-edit", "tx-del", "tx-clear"].includes(action)) {
+    toast("Admin hanya dapat melihat portofolio user.", "err");
+    return;
+  }
   if (action === "tx-add") {
     openTxModal({ code: el.dataset.code || null });
+    return;
+  }
+  if (action === "portfolio-refresh") {
+    try {
+      await DB.loadAdminPortfolios();
+      if (ui.portfolioUser !== "all" && !DB.state.adminUsers.some((u) => String(u.id) === String(ui.portfolioUser))) {
+        ui.portfolioUser = "all";
+      }
+      toast("Portofolio user dimuat ulang");
+      refresh();
+    } catch (err) {
+      toast(err.message, "err");
+    }
     return;
   }
   if (action === "price-refresh") {

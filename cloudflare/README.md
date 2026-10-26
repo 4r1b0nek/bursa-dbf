@@ -72,6 +72,7 @@ npm run deploy
 | GET | `/api/me` | login |
 | POST | `/api/me/password` | login |
 | GET | `/api/bootstrap` | login |
+| GET | `/api/admin/portfolios` | ADMIN — semua user + transaksi (read-only) |
 | GET/POST | `/api/transactions` | login |
 | PATCH/DELETE | `/api/transactions/:id` | login (milik sendiri) |
 | GET/POST | `/api/users` | ADMIN |
@@ -102,6 +103,8 @@ curl https://bursa-dbf-api.agus-asarry.workers.dev/api/bootstrap \
 - Token ditandatangani HMAC-SHA256, berlaku 8 jam, dan setiap request memeriksa
   ulang status/expiry user dari D1.
 - Role tidak dipercaya dari token; role dibaca dari D1.
+- Admin bersifat **read-only** untuk transaksi portofolio; endpoint tulis `/api/transactions`
+  menolak role ADMIN, dan hanya user pemilik yang dapat mengubah portofolionya.
 - Jangan menaruh token Cloudflare/D1 di frontend. Browser hanya memegang token login.
 - D1 tetap bisa diakses lewat akun Cloudflare Anda; gunakan 2FA dan batasi akses.
 

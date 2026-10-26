@@ -34,7 +34,8 @@ tidak memerlukan server, build step, atau basis data tambahan.
 - **Lembar analisis** — valuasi (DDM, PE/PB wajar), radar enam faktor, skenario bull/base/bear
   1–3–5 tahun, tren 10 minggu, indikator teknikal, riwayat dividen, dan level harga.
 - **Portofolio** — jurnal beli/jual, biaya rata-rata, laba/rugi unrealized & realisasi,
-  dividen tahunan, yield on cost, alokasi donat. Berbasis tabel `TRANSAKSI.DBF`.
+  dividen tahunan, yield on cost, alokasi donat. User mengelola portofolionya sendiri;
+  admin dapat melihat semua portofolio dengan filter user, tetapi **read-only**.
 - **Simulasi** — proyeksi setoran bulanan dengan reinvestasi dividen, lengkap dengan IRR.
 - **Login & role** — form login, sesi 8 jam, role `ADMIN`/`USER`, status aktif, dan masa
   berlaku akun (kedaluwarsa otomatis ditolak).
@@ -60,7 +61,8 @@ akun bootstrap di [`tools/build_dbf.py`](tools/build_dbf.py).
 | Fitur | ADMIN | USER |
 | --- | :---: | :---: |
 | Ringkasan, analisis saham, portofolio, simulasi | ✓ | ✓ |
-| Tambah/ubah transaksi portofolio | ✓ | ✓ |
+| Tambah/ubah transaksi portofolio | — | ✓ |
+| Melihat semua portofolio user + filter | ✓ | — |
 | Update harga | ✓ | — |
 | Manajemen pengguna & role | ✓ | — |
 | Ekspor/impor DBF & Database browser | ✓* | — |

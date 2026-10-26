@@ -43,6 +43,8 @@ export const state = {
   folderPermission: "unknown",
   persistError: null,
   autoRefreshed: false,
+  adminUsers: [],
+  adminTransactions: [],
   listeners: new Set(),
 };
 
@@ -172,6 +174,25 @@ export async function loadApi(payload = null) {
 
 export async function reloadApi() {
   return loadApi();
+}
+
+/** Data seluruh portofolio user untuk tampilan admin (read-only). */
+export async function loadAdminPortfolios() {
+  const data = await API.adminPortfolios();
+  state.adminUsers = data.users || [];
+  state.adminTransactions = data.transactions || [];
+  emit();
+  return data;
+}
+
+export function clearAdminPortfolios() {
+  state.adminUsers = [];
+  state.adminTransactions = [];
+}
+
+export function adminTransactionsFor(userId) {
+  const id = Number(userId);
+  return state.adminTransactions.filter((tx) => Number(tx.USER_ID) === id);
 }
 
 /** Cache pengguna dari /api/users untuk halaman admin. */
@@ -483,10 +504,10 @@ export function stockByCode(code) {
 /* -------------------------------------------------------------- portofolio */
 const LOT_SIZE = 100;
 
-export function computePortfolio() {
+export function computePortfolio(transactions = rows("TRANSAKSI")) {
   const stocks = stockList();
   const priceOf = new Map(stocks.map((s) => [s.KODE, s]));
-  const txs = rows("TRANSAKSI")
+  const txs = transactions
     .map((row, index) => ({ ...row, _index: index }))
     .sort((a, b) => String(a.TANGGAL).localeCompare(String(b.TANGGAL)) || a.ID - b.ID);
 
