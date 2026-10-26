@@ -136,3 +136,7 @@ export async function changePassword(current, next) {
 export async function updatePrices(prices) {
   return request("/api/admin/prices", { method: "POST", body: { prices } });
 }
+
+export async function refreshPrices() {
+  return request("/api/admin/prices/refresh", { method: "POST" });
+}

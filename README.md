@@ -27,11 +27,10 @@ tidak memerlukan server, build step, atau basis data tambahan.
 - **Ringkasan** — skor 9 emiten, margin of safety, dividend yield, peta valuasi (yield vs MoS),
   dan tesis singkat.
 - **Analisis saham** — tabel yang bisa dicari, difilter per sektor/rating, dan diurutkan.
-- **Update harga** — ubah harga terbaru 9 emiten; PE, PB, DY, dan MoS dihitung ulang.
-  Mode D1 menyimpannya ke database; mode fallback DBF dapat diekspor kembali ke `.DBF`.
-- **Update otomatis** — GitHub Actions mengambil harga dari Yahoo Finance setiap hari kerja
-  pukul 17.15 WIB dan memperbarui DBF fallback. Pada mode D1, gunakan **Update harga** di UI
-  (admin) sampai sinkronisasi otomatis D1 dikonfigurasi.
+- **Update harga** — tombol **Update harga (Yahoo)** mengambil harga terbaru dan menyimpannya ke D1;
+  tersedia juga **Input manual** sebagai fallback.
+- **Update otomatis** — Cron Trigger Worker berjalan Senin–Jumat **17:15 WIB** untuk mengambil
+  Yahoo Finance dan memperbarui D1. Workflow GitHub Actions tetap memperbarui DBF fallback.
 - **Lembar analisis** — valuasi (DDM, PE/PB wajar), radar enam faktor, skenario bull/base/bear
   1–3–5 tahun, tren 10 minggu, indikator teknikal, riwayat dividen, dan level harga.
 - **Portofolio** — jurnal beli/jual, biaya rata-rata, laba/rugi unrealized & realisasi,
@@ -161,10 +160,9 @@ GitHub Pages tetap statis, tetapi data dinamis sekarang disimpan di D1.
 
 ### 1. Harga saham (lewat UI)
 
-Buka **Saham → Update harga**, isi harga baru untuk satu atau beberapa emiten, lalu **Simpan harga**.
-Pada mode D1, Worker menghitung ulang `PE`, `PB`, `DY`, dan `MoS` lalu menyimpannya ke D1.
-Pada fallback DBF, perhitungan dilakukan di browser. Nilai wajar, skor, dan indikator teknikal
-**tidak** dihitung ulang.
+Buka **Saham → Update harga (Yahoo)**, lalu konfirmasi. Worker mengambil harga 9 emiten,
+menghitung ulang `PE`, `PB`, `DY`, dan `MoS`, lalu menyimpannya ke D1. Tombol **Input manual**
+tetap tersedia jika Yahoo gagal. Nilai wajar, skor, dan indikator teknikal **tidak** dihitung ulang.
 
 Tanggal pembaruan disimpan di `PARAM.HARGA_PER` dan ditampilkan pada catatan tabel Saham/Portofolio.
 Setelah disimpan, status berubah menjadi *“belum diekspor”*: unduh **SAHAM.DBF** dan **VALUASI.DBF**

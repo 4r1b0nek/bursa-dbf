@@ -6,6 +6,9 @@
   "observability": {
     "enabled": true
   },
+  "triggers": {
+    "crons": ["15 10 * * 1-5"]
+  },
   "vars": {
     "ALLOWED_ORIGINS": "https://4r1b0nek.github.io,http://localhost:8765,http://127.0.0.1:8765"
   },

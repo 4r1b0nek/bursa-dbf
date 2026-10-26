@@ -438,21 +438,18 @@ async function setUserStatus(request, env, user, id) {
 }
 
 /* --------------------------------------------------------------- prices */
-async function updatePrices(request, env) {
-  const body = await readJson(request);
-  if (!body?.prices || typeof body.prices !== "object") {
-    return json({ error: "Body prices wajib." }, 400, request, env);
-  }
+async function applyPriceMap(env, prices, { source = "Input manual (D1)", priceDate = today() } = {}) {
   const rows = await env.DB.prepare("SELECT KODE, HARGA, EPS, BVPS, DPS, FV, MCAP_T FROM SAHAM").all();
   const byCode = new Map((rows.results || []).map((r) => [r.KODE, r]));
   const statements = [];
   const changed = [];
 
-  for (const [code, raw] of Object.entries(body.prices)) {
+  for (const [code, raw] of Object.entries(prices)) {
     const price = Number(raw);
     if (!Number.isFinite(price) || price <= 0) continue;
     const s = byCode.get(String(code).toUpperCase());
     if (!s) continue;
+    if (Number(s.HARGA) === price) continue;
     const pe = s.EPS ? price / s.EPS : null;
     const pb = s.BVPS ? price / s.BVPS : null;
     const dy = s.DPS ? s.DPS / price : null;
@@ -460,15 +457,94 @@ async function updatePrices(request, env) {
     const mcap = s.HARGA && s.MCAP_T ? price * (s.MCAP_T * 1e12 / s.HARGA) / 1e12 : s.MCAP_T;
     statements.push(env.DB.prepare(
       "UPDATE SAHAM SET HARGA = ?, MCAP_T = ?, PE = ?, PB = ?, DY = ?, MOS = ?, UPDAT = ? WHERE KODE = ?"
-    ).bind(price, mcap, pe, pb, dy, mos, today(), s.KODE));
+    ).bind(price, mcap, pe, pb, dy, mos, priceDate, s.KODE));
     statements.push(env.DB.prepare("UPDATE VALUASI SET MOS = ? WHERE KODE = ?").bind(mos, s.KODE));
     changed.push({ code: s.KODE, old: s.HARGA, price });
   }
-  if (!changed.length) return json({ error: "Tidak ada harga yang berubah." }, 400, request, env);
-  statements.push(env.DB.prepare("INSERT INTO PARAM (KUNCI, NILAI) VALUES ('HARGA_PER', ?) ON CONFLICT(KUNCI) DO UPDATE SET NILAI = excluded.NILAI").bind(today()));
-  statements.push(env.DB.prepare("INSERT INTO PARAM (KUNCI, NILAI) VALUES ('HARGA_SUMBER', 'Input manual (D1)') ON CONFLICT(KUNCI) DO UPDATE SET NILAI = excluded.NILAI"));
+  if (!changed.length) return { changed: [], priceDate, source };
+  statements.push(env.DB.prepare("INSERT INTO PARAM (KUNCI, NILAI) VALUES ('HARGA_PER', ?) ON CONFLICT(KUNCI) DO UPDATE SET NILAI = excluded.NILAI").bind(priceDate));
+  statements.push(env.DB.prepare("INSERT INTO PARAM (KUNCI, NILAI) VALUES ('HARGA_SUMBER', ?) ON CONFLICT(KUNCI) DO UPDATE SET NILAI = excluded.NILAI").bind(source));
   await env.DB.batch(statements);
-  return json({ changed, priceDate: today() }, 200, request, env);
+  return { changed, priceDate, source };
+}
+
+async function updatePrices(request, env) {
+  const body = await readJson(request);
+  if (!body?.prices || typeof body.prices !== "object") {
+    return json({ error: "Body prices wajib." }, 400, request, env);
+  }
+  const result = await applyPriceMap(env, body.prices, { source: "Input manual (D1)" });
+  if (!result.changed.length) return json({ error: "Tidak ada harga yang berubah." }, 400, request, env);
+  return json(result, 200, request, env);
+}
+
+const YAHOO_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36";
+
+function jakartaDate(epochSeconds) {
+  const d = epochSeconds ? new Date(Number(epochSeconds) * 1000) : new Date();
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(d);
+}
+
+async function fetchYahooQuote(code) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(code)}.JK?interval=1d&range=5d`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": YAHOO_UA, Accept: "application/json" },
+    cf: { cacheTtl: 0 },
+  });
+  if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
+  const data = await res.json();
+  if (data?.chart?.error) throw new Error(data.chart.error.description || "Yahoo error");
+  const result = data?.chart?.result?.[0];
+  const meta = result?.meta || {};
+  let price = Number(meta.regularMarketPrice);
+  if (!price) {
+    const closes = result?.indicators?.quote?.[0]?.close || [];
+    price = Number([...closes].reverse().find((c) => c));
+  }
+  if (!Number.isFinite(price) || price <= 0) throw new Error("harga tidak tersedia");
+  return { price, time: Number(meta.regularMarketTime) || Math.floor(Date.now() / 1000) };
+}
+
+/**
+ * Ambil 9 harga dari Yahoo Finance lalu tulis ke D1.
+ * Dipakai oleh endpoint admin dan Cron Trigger 17:15 WIB.
+ */
+async function syncYahooPrices(env) {
+  const rows = await env.DB.prepare("SELECT KODE FROM SAHAM ORDER BY KODE").all();
+  const codes = (rows.results || []).map((r) => r.KODE);
+  if (!codes.length) throw new Error("Data saham kosong.");
+
+  const quotes = {};
+  const failed = [];
+  const results = await Promise.allSettled(codes.map((code) => fetchYahooQuote(code)));
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") quotes[codes[index]] = result.value;
+    else failed.push(`${codes[index]}: ${result.reason?.message || "gagal"}`);
+  });
+  if (Object.keys(quotes).length < Math.ceil(codes.length / 2)) {
+    throw new Error(`Yahoo hanya mengembalikan ${Object.keys(quotes).length}/${codes.length} harga.`);
+  }
+
+  const prices = Object.fromEntries(Object.entries(quotes).map(([code, q]) => [code, q.price]));
+  const stamp = Math.max(...Object.values(quotes).map((q) => q.time || 0));
+  const priceDate = jakartaDate(stamp);
+  const applied = await applyPriceMap(env, prices, {
+    source: "Yahoo Finance (delayed)",
+    priceDate,
+  });
+  return { ...applied, failed, requested: codes.length };
+}
+
+async function refreshPrices(request, env) {
+  try {
+    const result = await syncYahooPrices(env);
+    return json(result, 200, request, env);
+  } catch (err) {
+    console.error("Yahoo sync:", err);
+    return json({ error: err.message || "Gagal mengambil harga Yahoo." }, 502, request, env);
+  }
 }
 
 /* --------------------------------------------------------------- router */
@@ -521,6 +597,11 @@ export default {
         if (userMatch && request.method === "PATCH") return await updateUser(request, env, user, Number(userMatch[1]));
       }
 
+      if (url.pathname === "/api/admin/prices/refresh" && request.method === "POST") {
+        if (String(user.ROLE).toUpperCase() !== "ADMIN") return json({ error: "Hanya administrator." }, 403, request, env);
+        return await refreshPrices(request, env);
+      }
+
       if (url.pathname === "/api/admin/prices" && request.method === "POST") {
         if (String(user.ROLE).toUpperCase() !== "ADMIN") return json({ error: "Hanya administrator." }, 403, request, env);
         return await updatePrices(request, env);
@@ -531,5 +612,13 @@ export default {
       console.error("API error:", err);
       return json({ error: "Terjadi kesalahan server." }, 500, request, env);
     }
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      syncYahooPrices(env)
+        .then((result) => console.log("Cron Yahoo:", JSON.stringify(result)))
+        .catch((err) => console.error("Cron Yahoo gagal:", err))
+    );
   },
 };

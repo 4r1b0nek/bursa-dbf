@@ -625,7 +625,10 @@ function viewStocks() {
     </select>
     <span class="count" id="stock-count">${list.length} dari ${stocks.length} emiten</span>
     <div class="grow"></div>
-    ${Auth.isAdmin() ? `<button class="btn btn-ghost btn-sm" data-action="price-editor">${icon("edit")} Update harga</button>` : ""}
+    ${Auth.isAdmin() ? (DB.apiMode
+      ? `<button class="btn btn-primary btn-sm" data-action="price-refresh">${icon("refresh")} Update harga (Yahoo)</button>
+         <button class="btn btn-ghost btn-sm" data-action="price-editor">${icon("edit")} Input manual</button>`
+      : `<button class="btn btn-ghost btn-sm" data-action="price-editor">${icon("edit")} Update harga</button>`) : ""}
     ${Auth.isAdmin() && !DB.apiMode ? `<button class="btn btn-ghost btn-sm" data-action="export-all">${icon("download")} Unduh DBF</button>` : ""}
   </div>
 
@@ -1329,7 +1332,7 @@ async function onClick(e) {
   if (!el) return;
   const action = el.dataset.action;
   const adminOnly = new Set([
-    "price-editor", "export-table", "export-all", "reload-reference", "save-folder",
+    "price-editor", "price-refresh", "export-table", "export-all", "reload-reference", "save-folder",
     "import", "select-table", "toggle-show-all", "reset-db",
     "user-add", "user-edit", "user-toggle",
   ]);
@@ -1389,6 +1392,28 @@ async function onClick(e) {
   }
   if (action === "tx-add") {
     openTxModal({ code: el.dataset.code || null });
+    return;
+  }
+  if (action === "price-refresh") {
+    if (!window.confirm("Ambil harga terbaru 9 emiten dari Yahoo Finance dan simpan ke D1?")) return;
+    const original = el.innerHTML;
+    el.disabled = true;
+    el.textContent = "Mengambil Yahoo…";
+    try {
+      const result = await API.refreshPrices();
+      await DB.loadApi();
+      const count = Array.isArray(result.changed) ? result.changed.length : 0;
+      const failed = Array.isArray(result.failed) ? result.failed.length : 0;
+      toast(count
+        ? `${count} harga diperbarui dari Yahoo${failed ? ` · ${failed} gagal` : ""}`
+        : "Harga D1 sudah terbaru dari Yahoo");
+      refresh();
+    } catch (err) {
+      toast(`${err.message || "Gagal mengambil Yahoo"} · gunakan Input manual`, "err");
+    } finally {
+      el.disabled = false;
+      el.innerHTML = original;
+    }
     return;
   }
   if (action === "price-editor") {

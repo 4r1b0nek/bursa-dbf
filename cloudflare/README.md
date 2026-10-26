@@ -14,6 +14,7 @@ API untuk Bursa DBF: **Cloudflare Worker + D1 (SQLite)**. Browser hanya memanggi
 | Database ID | `b1f1ec41-8415-4840-a2ff-4d3b819fc215` |
 | Binding | `DB` |
 | Tabel | 9 (190 baris data awal) |
+| Cron | `15 10 * * 1-5` — 17:15 WIB, Yahoo → D1 |
 
 ## Prasyarat
 
@@ -77,6 +78,7 @@ npm run deploy
 | PATCH | `/api/users/:id` | ADMIN |
 | POST | `/api/users/:id/status` | ADMIN |
 | POST | `/api/admin/prices` | ADMIN |
+| POST | `/api/admin/prices/refresh` | ADMIN — ambil Yahoo lalu tulis D1 |
 
 Contoh login (ganti `<password-admin-D1>` dengan password yang diberikan saat setup):
 
