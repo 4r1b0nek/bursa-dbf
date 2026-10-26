@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "description": "Dashboard analisis 9 saham BEI dengan penyimpanan tabel DBF (dBase III)",
+  "homepage": "https://4r1b0nek.github.io/bursa-dbf/",
   "type": "module",
   "keywords": ["dbf", "dbase", "saham", "bei", "dashboard", "github-pages"],
   "license": "MIT",

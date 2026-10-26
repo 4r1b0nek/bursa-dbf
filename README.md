@@ -5,6 +5,8 @@ tabel **DBF (dBase III)** — bukan JSON atau database server. Seluruh angka dib
 berkas `.DBF` di folder [`data/`](data), dan perubahan portofolio dapat ditulis kembali menjadi
 berkas `.DBF` yang sah.
 
+**Live:** <https://4r1b0nek.github.io/bursa-dbf/> · **Repo:** <https://github.com/4r1b0nek/bursa-dbf>
+
 ![Dashboard Bursa DBF](docs/preview-dashboard.png)
 
 > Analisis fundamental per **21 Oktober 2026**. Harga saham dapat diperbarui manual atau
