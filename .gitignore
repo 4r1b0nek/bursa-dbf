@@ -13,3 +13,10 @@ backups/
 .vscode/
 .idea/
 .tools/
+.cf/
+.wrangler-home/
+.dev.vars
+cloudflare/seed.sql
+cloudflare/backup.sql
+cloudflare/.wrangler/
+user dan password.txt

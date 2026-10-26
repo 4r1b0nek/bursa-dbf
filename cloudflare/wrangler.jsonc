@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bursa-dbf-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-26",
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://4r1b0nek.github.io,http://localhost:8765,http://127.0.0.1:8765"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bursa-dbf",
+      "database_id": "b1f1ec41-8415-4840-a2ff-4d3b819fc215"
+    }
+  ]
+}

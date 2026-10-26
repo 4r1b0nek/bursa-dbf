@@ -11,7 +11,7 @@
 import * as DB from "./store.js";
 
 export const SESSION_HOURS = 8;
-export const PASSWORD_ITERATIONS = 210000;
+export const PASSWORD_ITERATIONS = 100000;
 export const MIN_PASSWORD = 8;
 
 const SESSION_KEY = "bursa-dbf/session/v1";

@@ -81,6 +81,21 @@ Aturan akun:
 > pengunjung, ekspor `PENGGUNA.DBF` lalu commit ke repositori; jika tidak, akun baru hanya ada
 > di browser admin tersebut.
 
+## Backend Cloudflare D1 (SQLite)
+
+Tersedia backend terpisah di **Cloudflare Worker + D1**:
+
+- API: https://bursa-dbf-api.agus-asarry.workers.dev
+- Database: D1 `bursa-dbf` (SQLite, region APAC), 9 tabel, 190 baris data awal.
+- Browser hanya memanggil `/api/*`; file DBF dan nama tabel tidak dikirim ke browser.
+- Login, role, expiry, dan CRUD pengguna diperiksa di server.
+- Kode, skema, dan panduan deploy: [`cloudflare/README.md`](cloudflare/README.md).
+
+> Frontend GitHub Pages saat ini **masih memakai DBF** dan login client-side. Backend D1
+> sudah berjalan dan diuji, tetapi adapter frontend (mengganti `store.js`/`auth.js` ke API)
+> adalah langkah berikutnya. Selama belum diubah, nama tabel masih terlihat di Network tab
+> halaman GitHub Pages.
+
 ## Jalankan secara lokal
 
 Aplikasi membutuhkan HTTP server karena browser memblokir `fetch()` berkas `.DBF` dari `file://`.

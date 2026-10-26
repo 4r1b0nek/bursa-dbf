@@ -1,0 +1,19 @@
+{
+  "name": "bursa-dbf-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API Cloudflare Worker + D1 untuk Bursa DBF",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:schema": "wrangler d1 execute bursa-dbf --remote --file=schema.sql",
+    "db:seed": "wrangler d1 execute bursa-dbf --remote --file=seed.sql",
+    "db:schema:local": "wrangler d1 execute bursa-dbf --local --file=schema.sql",
+    "db:seed:local": "wrangler d1 execute bursa-dbf --local --file=seed.sql",
+    "db:export": "wrangler d1 export bursa-dbf --remote --output=backup.sql"
+  },
+  "devDependencies": {
+    "wrangler": "4.152.0"
+  }
+}
