@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.DS_Store
+Thumbs.db
+desktop.ini
+node_modules/
+npm-debug.log*
+*.log
+demo.zip
+*.tmp
+backups/
+.vscode/
+.idea/
+.tools/

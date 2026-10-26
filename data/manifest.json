@@ -1,0 +1,94 @@
+{
+ "app": "Bursa DBF",
+ "version": "1.0.0",
+ "generated": "2026-10-24T13:37:07",
+ "dataDate": "2026-10-21",
+ "encoding": "ascii / dBase III (cp1252 driver)",
+ "source": "stockanalysis.com + riset berita (Kontan, CNBC, Antara, IDX Channel), 21 Okt 2026",
+ "fx": 17997,
+ "coe": 0.135,
+ "tables": [
+  {
+   "name": "SAHAM",
+   "file": "SAHAM.DBF",
+   "label": "Master saham",
+   "description": "Profil, harga, rasio fundamental, nilai wajar, dan rekomendasi 9 emiten.",
+   "records": 9,
+   "fields": 39,
+   "bytes": 7591,
+   "sha1": "f8e5515b9489"
+  },
+  {
+   "name": "VALUASI",
+   "file": "VALUASI.DBF",
+   "label": "Model valuasi",
+   "description": "Nilai wajar (DDM, PE, PB), bobot model, margin of safety, dan skenario 1/3/5 tahun.",
+   "records": 9,
+   "fields": 23,
+   "bytes": 2930,
+   "sha1": "a004ffb849c6"
+  },
+  {
+   "name": "TEKNIKAL",
+   "file": "TEKNIKAL.DBF",
+   "label": "Indikator teknikal",
+   "description": "MA, RSI, MACD, ATR, volume ratio, dan jarak harga terhadap rata-rata.",
+   "records": 9,
+   "fields": 19,
+   "bytes": 2082,
+   "sha1": "ced9f8c14ab3"
+  },
+  {
+   "name": "SKOR",
+   "file": "SKOR.DBF",
+   "label": "Skor multi-faktor",
+   "description": "Skor 0-10 untuk fundamental, valuasi, dividen, teknikal, risiko, dan prospek.",
+   "records": 9,
+   "fields": 8,
+   "bytes": 533,
+   "sha1": "5f6bb4879eea"
+  },
+  {
+   "name": "DIVIDEN",
+   "file": "DIVIDEN.DBF",
+   "label": "Riwayat dividen",
+   "description": "Dividen tunai per tahun (DPS) per emiten; emiten siklikal dipisah reguler/spesial.",
+   "records": 46,
+   "fields": 4,
+   "bytes": 1404,
+   "sha1": "eda5e7a1b952"
+  },
+  {
+   "name": "HISTORIK",
+   "file": "HISTORIK.DBF",
+   "label": "Harga mingguan",
+   "description": "Sepuluh penutupan mingguan terakhir per emiten (untuk grafik tren).",
+   "records": 90,
+   "fields": 4,
+   "bytes": 2322,
+   "sha1": "c5b9ab063334"
+  },
+  {
+   "name": "TRANSAKSI",
+   "file": "TRANSAKSI.DBF",
+   "label": "Transaksi portofolio",
+   "description": "Jurnal beli/jual (lot, harga, fee). Satu-satunya tabel yang Anda tulis dari UI.",
+   "records": 5,
+   "fields": 8,
+   "bytes": 865,
+   "sha1": "8156c77c9041"
+  },
+  {
+   "name": "PARAM",
+   "file": "PARAM.DBF",
+   "label": "Parameter aplikasi",
+   "description": "Metadata: tanggal data, FX, cost of equity, dan catatan metode.",
+   "records": 11,
+   "fields": 2,
+   "bytes": 1165,
+   "sha1": "4bfe3b5e89e6"
+  }
+ ],
+ "priceUpdated": "2026-10-26T13:21:05+07:00",
+ "priceSource": "Yahoo Finance (delayed)"
+}

@@ -1,0 +1,67 @@
+name: Update harga (Yahoo Finance)
+
+on:
+  schedule:
+    # 17:15 WIB, Senin–Jumat (setelah sesi IDX tutup)
+    - cron: "15 10 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Ambil harga dan perbarui DBF
+        run: |
+          set -o pipefail
+          python tools/update_harga_live.py | tee /tmp/update.log
+          cat /tmp/update.log >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit perubahan
+        id: commit
+        run: |
+          if git diff --quiet -- data; then
+            echo "Tidak ada perubahan harga."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "bursa-dbf-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/*.DBF data/manifest.json
+          git commit -m "data: perbarui harga Yahoo Finance ($(TZ=Asia/Jakarta date +%F))"
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Pages
+        if: steps.commit.outputs.changed == 'true'
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        if: steps.commit.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy to GitHub Pages
+        if: steps.commit.outputs.changed == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4

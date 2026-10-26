@@ -1,0 +1,16 @@
+{
+  "name": "bursa-dbf",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dashboard analisis 9 saham BEI dengan penyimpanan tabel DBF (dBase III)",
+  "type": "module",
+  "keywords": ["dbf", "dbase", "saham", "bei", "dashboard", "github-pages"],
+  "license": "MIT",
+  "scripts": {
+    "start": "python -m http.server 8765",
+    "data": "python tools/build_dbf.py",
+    "update:harga": "python tools/update_harga_live.py",
+    "test": "node tools/test_dbf.mjs && node tools/test_app.mjs",
+    "test:zip": "node tools/test_zip.mjs demo.zip && python tools/test_zip.py demo.zip"
+  }
+}
