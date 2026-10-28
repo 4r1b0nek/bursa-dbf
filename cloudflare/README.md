@@ -13,7 +13,7 @@ API untuk Bursa DBF: **Cloudflare Worker + D1 (SQLite)**. Browser hanya memanggi
 | Region | APAC |
 | Database ID | `b1f1ec41-8415-4840-a2ff-4d3b819fc215` |
 | Binding | `DB` |
-| Tabel | 10 (219 baris, 13 saham) |
+| Tabel | 10 (236 baris, 14 saham) |
 | Cron | `15 10 * * 1-5` — 17:15 WIB, Yahoo → D1 |
 
 ## Prasyarat

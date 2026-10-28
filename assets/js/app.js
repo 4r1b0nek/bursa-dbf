@@ -706,6 +706,8 @@ function renderDrawer() {
   const v = s.valuasi || {};
   const t = s.teknikal || {};
   const sk = s.skor || {};
+  const scoreKeys = ["FUND", "VAL", "DIV", "TECH", "RISK", "PROS"];
+  const hasScoreFactors = scoreKeys.some((key) => isNum(sk[key]));
   const divs = aggregateDividends(s.dividen);
   const cagr = divCagr(divs);
   const tone = RATING_TONE[s.RATING] || "pos";
@@ -738,8 +740,8 @@ function renderDrawer() {
     <div class="metric-grid mt-3">
       ${metric("PE", `${num(s.PE, 2)}x`, `avg ${num(s.PEAVG5, 2)}x`)}
       ${metric("PB", `${num(s.PB, 2)}x`, `avg ${num(s.PBAVG5, 2)}x`)}
-      ${metric("ROE", `${num(s.ROE, 1)}%`, `ROA ${num(s.ROA, 1)}%`)}
-      ${metric("Payout", pct(s.PAYOUT, 0), "dari EPS TTM")}
+      ${metric("ROE", isNum(s.ROE) ? `${num(s.ROE, 1)}%` : "—", `ROA ${isNum(s.ROA) ? `${num(s.ROA, 1)}%` : "—"}`)}
+      ${metric("Payout", isNum(s.PAYOUT) ? pct(s.PAYOUT, 0) : "—", "dari EPS TTM")}
       ${metric("EV/EBITDA", isNum(s.EVEBITDA) ? `${num(s.EVEBITDA, 2)}x` : "—", "enterprise value")}
       ${metric("DER", isNum(s.DER) ? num(s.DER, 2) : "—", "utang / ekuitas")}
       ${metric("RSI(14)", num(t.RSI14, 1), t.RSI14 < 30 ? "oversold" : t.RSI14 > 70 ? "overbought" : "netral")}
@@ -757,7 +759,7 @@ function renderDrawer() {
           ${kvRow("Nilai wajar", rupiah(s.FV))}
           ${kvRow("Margin of safety", pct(s.MOS, 1, true), s.MOS > 0 ? "pos" : "neg")}
         </div>
-        <div>${C.radar(sk)}</div>
+        <div>${hasScoreFactors ? C.radar(sk) : `<div class="chart-empty" style="padding:40px 10px;text-align:center">Skor faktor belum tersedia.<br><span class="small muted">Lengkapi sheet Skor di Excel.</span></div>`}</div>
       </div>
     </div>
 

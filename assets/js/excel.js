@@ -92,6 +92,7 @@ export function parseAnalysisWorkbook(buffer) {
       SEKTOR: text(row.Sektor),
       MODEL: inferModel(row.Sektor),
       HARGA: price,
+      MCAP_T: n(row["Market Cap (Rp T)"]),
       EPS: eps,
       BVPS: bvps,
       DPS: dps,
@@ -100,6 +101,17 @@ export function parseAnalysisWorkbook(buffer) {
       DY: dy,
       PAYOUT: n(row.Payout) ?? (dps && eps ? dps / eps : null),
       ROE: roe === null ? null : roe * 100,
+      ROA: n(row["ROA (%)"]),
+      PM: n(row["PM (%)"]),
+      OM: n(row["OM (%)"]),
+      DER: n(row["DER (x)"]),
+      CR: n(row["CR (x)"]),
+      ICR: n(row["ICR (x)"]),
+      EVEBITDA: n(row["EV/EBITDA (x)"]),
+      FCF: n(row.FCF),
+      DEBT: n(row.Debt),
+      EQUITY: n(row.Equity),
+      CASH: n(row.Cash),
       PEAVG5: n(row["PER 5y"]),
       PBAVG5: n(row["PBV 5y"]),
       FV: fv,
@@ -108,6 +120,13 @@ export function parseAnalysisWorkbook(buffer) {
       RATING: text(row.Rating),
       KEPUTUSAN: text(row.Keputusan),
       BINTANG: score === null ? null : Math.max(0, Math.min(5, Math.round((score / 20) * 2) / 2)),
+      LEVEL_AKUM: text(row["Level Akumulasi"]) || null,
+      LEVEL_BUY: text(row["Level Beli"]) || null,
+      TARGET: typeof row.Target === "number"
+        ? new Intl.NumberFormat("id-ID").format(Math.round(row.Target))
+        : (text(row.Target) || null),
+      CUTLOSS: n(row["Cut Loss"]),
+      RINGKASAN: text(row.Ringkasan) || null,
       UPDAT: updated,
     };
   }).filter((s) => s.KODE && s.NAMA);
@@ -120,10 +139,16 @@ export function parseAnalysisWorkbook(buffer) {
       KODE: code,
       MODEL: text(row.Metode),
       BOBOT: text(row.Metode),
+      DDM: n(row.DDM),
+      DDM_LO: n(row["DDM Low"]),
+      DDM_HI: n(row["DDM High"]),
       PEFAIR: n(row["PE wajar"]),
       PEVALUE: s?.PE ?? null,
+      PBF: n(row["PB Wajar"]),
       PBVALUE: s?.PB ?? null,
       FV: n(row["Nilai Wajar"]) ?? s?.FV ?? null,
+      FV_LO: n(row["FV Low"]),
+      FV_HI: n(row["FV High"]),
       MOS: s?.MOS ?? null,
       BULL1: n(row["Bull 1y"]), BULL3: n(row["Bull 3y"]), BULL5: n(row["Bull 5y"]),
       BASE1: n(row["Base 1y"]), BASE3: n(row["Base 3y"]), BASE5: n(row["Base 5y"]),
@@ -147,10 +172,39 @@ export function parseAnalysisWorkbook(buffer) {
     DISTMA200: n(row["vs MA200"]) === null ? null : n(row["vs MA200"]) * 100,
   }));
 
-  const scores = stocks.map((s) => ({ KODE: s.KODE, TOTAL: s.SKOR }));
-  const dividends = stocks
-    .filter((s) => s.DPS !== null && s.DPS > 0)
-    .map((s) => ({ KODE: s.KODE, TAHUN: Number(updated.slice(0, 4)), DPS: s.DPS, TIPE: "TTM" }));
+  const scoreGrid = wb.Sheets.Skor
+    ? XLSX.utils.sheet_to_json(wb.Sheets.Skor, { header: 1, defval: null, raw: true })
+    : [];
+  const scoreHeader = findHeader(scoreGrid, (row) => row[0] === "KODE" && row.includes("FUND"));
+  const scoreTable = scoreHeader < 0 ? [] : table(scoreGrid, scoreHeader);
+  const scoreByCode = new Map(scoreTable.map((row) => [text(row.KODE).toUpperCase(), row]));
+
+  const scores = stocks.map((s) => {
+    const row = scoreByCode.get(s.KODE) || {};
+    return {
+      KODE: s.KODE,
+      FUND: n(row.FUND), VAL: n(row.VAL), DIV: n(row.DIV),
+      TECH: n(row.TECH), RISK: n(row.RISK), PROS: n(row.PROS),
+      TOTAL: s.SKOR,
+    };
+  });
+
+  const divGrid = wb.Sheets.Dividen
+    ? XLSX.utils.sheet_to_json(wb.Sheets.Dividen, { header: 1, defval: null, raw: true })
+    : [];
+  const divHeader = findHeader(divGrid, (row) => row[0] === "KODE" && row.includes("TAHUN"));
+  const dividendRows = divHeader < 0 ? [] : table(divGrid, divHeader)
+    .filter((row) => /^[A-Z0-9]{4}$/.test(text(row.KODE).toUpperCase()) && n(row.DPS) !== null && n(row.DPS) > 0)
+    .map((row) => ({
+      KODE: text(row.KODE).toUpperCase(),
+      TAHUN: n(row.TAHUN) || Number(updated.slice(0, 4)),
+      DPS: n(row.DPS),
+      TIPE: text(row.TIPE) || "FINAL",
+    }));
+  const dividends = dividendRows.length
+    ? dividendRows
+    : stocks.filter((s) => s.DPS !== null && s.DPS > 0)
+      .map((s) => ({ KODE: s.KODE, TAHUN: Number(updated.slice(0, 4)), DPS: s.DPS, TIPE: "TTM" }));
 
   let log = null;
   if (logRows.length) {

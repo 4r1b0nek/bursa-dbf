@@ -1,5 +1,5 @@
-/* Service worker Bursa DBF — cache app shell, never cache API/DBF. */
-const CACHE = "bursa-dbf-shell-v2";
+﻿/* Service worker Bursa DBF â€” cache app shell, never cache API/DBF. */
+const CACHE = "bursa-dbf-shell-v3";
 const SCOPE = self.registration.scope;
 const INDEX = new URL("index.html", SCOPE).href;
 const ASSETS = [
@@ -80,3 +80,4 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(request))
   );
 });
+
