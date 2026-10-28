@@ -1,7 +1,7 @@
 {
   "name": "Bursa DBF — Analisis Saham BEI",
   "short_name": "Bursa DBF",
-  "description": "Dashboard analisis fundamental, valuasi, dividen, portofolio, dan log bulanan 9 saham BEI.",
+  "description": "Dashboard analisis fundamental, valuasi, dividen, portofolio, dan log bulanan saham BEI.",
   "lang": "id",
   "dir": "ltr",
   "id": "./",

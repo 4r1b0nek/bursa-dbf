@@ -1,9 +1,8 @@
 # Bursa DBF
 
-Aplikasi web untuk analisis **9 saham Bursa Efek Indonesia** dengan penyimpanan data berupa
-tabel **DBF (dBase III)** — bukan JSON atau database server. Seluruh angka dibaca langsung dari
-berkas `.DBF` di folder [`data/`](data), dan perubahan portofolio dapat ditulis kembali menjadi
-berkas `.DBF` yang sah.
+Aplikasi web untuk analisis **13 saham Bursa Efek Indonesia**. Mode default memakai
+**Cloudflare D1 (SQLite)** lewat Worker; fallback `?mode=dbf` tetap membaca tabel
+**DBF (dBase III)** di folder [`data/`](data).
 
 **Live:** <https://4r1b0nek.github.io/bursa-dbf/> · **Repo:** <https://github.com/4r1b0nek/bursa-dbf>
 
@@ -24,7 +23,7 @@ tidak memerlukan server, build step, atau basis data tambahan.
 
 ## Fitur
 
-- **Ringkasan** — skor 9 emiten, margin of safety, dividend yield, peta valuasi (yield vs MoS),
+- **Ringkasan** — skor 13 emiten, margin of safety, dividend yield, peta valuasi (yield vs MoS),
   dan tesis singkat.
 - **Analisis saham** — tabel yang bisa dicari, difilter per sektor/rating, dan diurutkan.
 - **Update harga** — tombol **Update harga (Yahoo)** mengambil harga terbaru dan menyimpannya ke D1;
@@ -41,8 +40,9 @@ tidak memerlukan server, build step, atau basis data tambahan.
   berlaku akun (kedaluwarsa otomatis ditolak).
 - **Manajemen pengguna** — admin dapat membuat, mengubah, mereset password, dan
   menonaktifkan/mengaktifkan akun. Setiap aksi sensitif diverifikasi ulang dengan password admin.
-- **Log bulanan** — admin mengunggah file `LOG_BULAN.DBF`; seluruh user dapat melihat
-  riwayat IHSG, yield, MoS, jumlah saham murah/buy, skor, dan catatan per bulan.
+- **Log bulanan** — admin mengunggah **Excel Dashboard** (`.xlsx`); data saham, valuasi,
+  teknikal, dan log bulanan diperbarui sekaligus. Seluruh user dapat melihat riwayat IHSG,
+  yield, MoS, jumlah saham murah/buy, skor, dan catatan per bulan.
 - **PWA Android** — dapat dipasang ke layar utama, tampil standalone, dan menyimpan
   app shell untuk dibuka saat offline. Data D1 tetap memerlukan internet.
 - **Database** — penjelajah 9 tabel DBF: struktur field, header DBF, pratinjau data,
@@ -92,7 +92,7 @@ Aturan akun:
 Tersedia backend terpisah di **Cloudflare Worker + D1**:
 
 - API: https://bursa-dbf-api.agus-asarry.workers.dev
-- Database: D1 `bursa-dbf` (SQLite, region APAC), 10 tabel, 191 baris data awal.
+- Database: D1 `bursa-dbf` (SQLite, region APAC), 10 tabel, 13 saham, 219 baris.
 - Browser hanya memanggil `/api/*`; file DBF dan nama tabel tidak dikirim ke browser.
 - Login, role, expiry, dan CRUD pengguna diperiksa di server.
 - Kode, skema, dan panduan deploy: [`cloudflare/README.md`](cloudflare/README.md).
@@ -183,7 +183,7 @@ GitHub Pages tetap statis, tetapi data dinamis sekarang disimpan di D1.
 
 ### 1. Harga saham (lewat UI)
 
-Buka **Saham → Update harga (Yahoo)**, lalu konfirmasi. Worker mengambil harga 9 emiten,
+Buka **Saham → Update harga (Yahoo)**, lalu konfirmasi. Worker mengambil harga emiten,
 menghitung ulang `PE`, `PB`, `DY`, dan `MoS`, lalu menyimpannya ke D1. Tombol **Input manual**
 tetap tersedia jika Yahoo gagal. Nilai wajar, skor, dan indikator teknikal **tidak** dihitung ulang.
 
@@ -332,6 +332,7 @@ Angka kunci pada snapshot analisis 21 Oktober 2026:
 │       ├── app.js              # routing, view, form transaksi, login & pengguna
 │       ├── auth.js             # sesi, PBKDF2, login, CRUD pengguna & role
 │       ├── pwa.js              # registrasi service worker + install prompt
+│       ├── excel.js            # parser Excel Dashboard 13 saham
 │       ├── store.js            # load DBF/API, portofolio, simulasi
 │       ├── dbf.js              # pembaca & penulis DBF
 │       ├── charts.js           # grafik SVG tanpa dependensi
@@ -396,7 +397,7 @@ Transaksi portofolio dan akun pengguna dipertahankan; tambahkan `--reset-transak
 
 - Data analisis statis per **21 Oktober 2026**. Harga dapat diperbarui manual lewat UI atau
   otomatis dari Yahoo Finance; nilai wajar/skor tetap mengacu analisis tersebut.
-- Hanya 9 emiten: **BJBR, BJTM, ADRO, PGEO, IPCC, TLKM, POWR, PTBA, TUGU**.
+- 13 emiten: **BMRI, BBRI, BJBR, BJTM, TLKM, HMSP, CLEO, ADRO, PTBA, PGEO, POWR, IPCC, TUGU**.
 - Portofolio awal berisi **5 transaksi contoh** (bertanda “Contoh:”); hapus lewat tombol
   **Hapus semua** di halaman Portofolio bila ingin mulai dari nol.
 - Tabel referensi (`SAHAM`, `VALUASI`, dst.) tidak dapat diedit bebas dari UI — hanya harga

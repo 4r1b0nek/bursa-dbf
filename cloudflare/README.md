@@ -13,7 +13,7 @@ API untuk Bursa DBF: **Cloudflare Worker + D1 (SQLite)**. Browser hanya memanggi
 | Region | APAC |
 | Database ID | `b1f1ec41-8415-4840-a2ff-4d3b819fc215` |
 | Binding | `DB` |
-| Tabel | 10 (191 baris data awal) |
+| Tabel | 10 (219 baris, 13 saham) |
 | Cron | `15 10 * * 1-5` — 17:15 WIB, Yahoo → D1 |
 
 ## Prasyarat
@@ -74,7 +74,8 @@ npm run deploy
 | GET | `/api/bootstrap` | login |
 | GET | `/api/admin/portfolios` | ADMIN — semua user + transaksi (read-only) |
 | GET | `/api/log-bulan` | login — riwayat log bulanan |
-| POST | `/api/admin/log-bulan` | ADMIN — upload baris DBF log bulanan |
+| POST | `/api/admin/log-bulan` | ADMIN — upload baris log (DBF legacy) |
+| POST | `/api/admin/import-analysis` | ADMIN — impor Excel Dashboard: saham, valuasi, teknikal, skor, log |
 | GET/POST | `/api/transactions` | login |
 | PATCH/DELETE | `/api/transactions/:id` | login (milik sendiri) |
 | GET/POST | `/api/users` | ADMIN |

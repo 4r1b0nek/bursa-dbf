@@ -1,5 +1,5 @@
 /* Service worker Bursa DBF — cache app shell, never cache API/DBF. */
-const CACHE = "bursa-dbf-shell-v1";
+const CACHE = "bursa-dbf-shell-v2";
 const SCOPE = self.registration.scope;
 const INDEX = new URL("index.html", SCOPE).href;
 const ASSETS = [
@@ -16,6 +16,8 @@ const ASSETS = [
   "assets/js/zip.js",
   "assets/js/format.js",
   "assets/js/pwa.js",
+  "assets/js/excel.js",
+  "assets/vendor/xlsx.full.min.js",
   "assets/icons/icon-192.png",
   "assets/icons/icon-512.png",
   "assets/icons/icon-maskable-512.png",

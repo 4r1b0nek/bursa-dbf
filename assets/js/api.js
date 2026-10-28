@@ -129,6 +129,10 @@ export async function uploadLogBulan(rows) {
   return request("/api/admin/log-bulan", { method: "POST", body: { rows } });
 }
 
+export async function importAnalysis(payload) {
+  return request("/api/admin/import-analysis", { method: "POST", body: payload });
+}
+
 export async function createUser(payload) {
   return request("/api/users", { method: "POST", body: payload });
 }

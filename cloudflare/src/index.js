@@ -493,6 +493,160 @@ async function setUserStatus(request, env, user, id) {
   return json({ ok: true }, 200, request, env);
 }
 
+/* ------------------------------------------------------ import analisis excel */
+const SAHAM_COLS = [
+  "KODE", "NAMA", "SEKTOR", "MODEL", "HARGA", "MCAP_T", "EPS", "BVPS", "PE", "PB", "DY", "DPS",
+  "PAYOUT", "ROE", "ROA", "PM", "OM", "DER", "CR", "ICR", "EVEBITDA", "FCF", "DEBT", "EQUITY",
+  "CASH", "PEAVG5", "PBAVG5", "FV", "MOS", "SKOR", "RATING", "KEPUTUSAN", "BINTANG", "LEVEL_AKUM",
+  "LEVEL_BUY", "TARGET", "CUTLOSS", "RINGKASAN", "UPDAT",
+];
+const VALUASI_COLS = [
+  "KODE", "MODEL", "BOBOT", "DDM", "DDM_LO", "DDM_HI", "PEFAIR", "PEVALUE", "PBF", "PBVALUE",
+  "FV", "FV_LO", "FV_HI", "MOS", "BULL1", "BULL3", "BULL5", "BASE1", "BASE3", "BASE5",
+  "BEAR1", "BEAR3", "BEAR5",
+];
+const TEKNIKAL_COLS = [
+  "KODE", "MA20", "MA50", "MA200", "RSI14", "MACD", "MACDSIG", "MACDHIST", "HI20", "LO20",
+  "HI52", "LO52", "ATR", "ATRPCT", "VOLRATIO", "CHG52", "DISTMA20", "DISTMA50", "DISTMA200",
+];
+const SKOR_COLS = ["KODE", "FUND", "VAL", "DIV", "TECH", "RISK", "PROS", "TOTAL"];
+const DIVIDEN_COLS = ["KODE", "TAHUN", "DPS", "TIPE"];
+
+function mergeFields(existing, incoming, cols) {
+  const out = {};
+  for (const col of cols) {
+    const value = incoming?.[col];
+    out[col] = (value === undefined || value === null || value === "") ? (existing?.[col] ?? null) : value;
+  }
+  return out;
+}
+
+function upsertStatement(env, table, cols, row, key = "KODE") {
+  const updates = cols.filter((col) => col !== key).map((col) => `${col} = excluded.${col}`).join(", ");
+  return env.DB.prepare(
+    `INSERT INTO ${table} (${cols.join(", ")}) VALUES (${cols.map(() => "?").join(", ")})
+     ON CONFLICT(${key}) DO UPDATE SET ${updates}`
+  ).bind(...cols.map((col) => row[col] ?? null));
+}
+
+async function runBatches(env, statements, size = 40) {
+  for (let i = 0; i < statements.length; i += size) {
+    await env.DB.batch(statements.slice(i, i + size));
+  }
+}
+
+function logStatement(env, row, userId) {
+  return env.DB.prepare(
+    `INSERT INTO LOG_BULAN (BULAN, TGL, IHSG, YIELD, MOS, JML_MURAH, JML_BUY, SKOR, CATATAN, CREATED_AT, CREATED_BY)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(BULAN) DO UPDATE SET
+       TGL = excluded.TGL, IHSG = excluded.IHSG, YIELD = excluded.YIELD, MOS = excluded.MOS,
+       JML_MURAH = excluded.JML_MURAH, JML_BUY = excluded.JML_BUY, SKOR = excluded.SKOR,
+       CATATAN = excluded.CATATAN, CREATED_AT = excluded.CREATED_AT, CREATED_BY = excluded.CREATED_BY`
+  ).bind(row.BULAN, row.TGL || null, row.IHSG ?? null, row.YIELD ?? null, row.MOS ?? null,
+    row.JML_MURAH ?? 0, row.JML_BUY ?? 0, row.SKOR ?? null, String(row.CATATAN || "").slice(0, 120),
+    today(), userId);
+}
+
+async function importAnalysis(request, env, user) {
+  const body = await readJson(request);
+  const stocks = Array.isArray(body?.stocks) ? body.stocks : [];
+  if (!stocks.length || stocks.length > 60) {
+    return json({ error: "Kirim 1–60 saham hasil analisis." }, 400, request, env);
+  }
+  const codes = new Set();
+  for (const s of stocks) {
+    const code = String(s?.KODE || "").trim().toUpperCase();
+    if (!/^[A-Z0-9]{4}$/.test(code)) return json({ error: `Kode saham tidak valid: ${code || "(kosong)"}` }, 400, request, env);
+    if (!String(s?.NAMA || "").trim()) return json({ error: `Nama emiten ${code} kosong.` }, 400, request, env);
+    if (codes.has(code)) return json({ error: `Kode duplikat: ${code}` }, 400, request, env);
+    codes.add(code);
+  }
+
+  const [sahamRows, valRows, techRows, scoreRows] = await env.DB.batch([
+    env.DB.prepare("SELECT * FROM SAHAM"),
+    env.DB.prepare("SELECT * FROM VALUASI"),
+    env.DB.prepare("SELECT * FROM TEKNIKAL"),
+    env.DB.prepare("SELECT * FROM SKOR"),
+  ]);
+  const existing = {
+    SAHAM: new Map((sahamRows.results || []).map((r) => [r.KODE, r])),
+    VALUASI: new Map((valRows.results || []).map((r) => [r.KODE, r])),
+    TEKNIKAL: new Map((techRows.results || []).map((r) => [r.KODE, r])),
+    SKOR: new Map((scoreRows.results || []).map((r) => [r.KODE, r])),
+  };
+  const statements = [];
+  const stockByCode = new Map();
+
+  for (const raw of stocks) {
+    const code = String(raw.KODE).trim().toUpperCase();
+    const stock = mergeFields(existing.SAHAM.get(code), { ...raw, KODE: code }, SAHAM_COLS);
+    stock.KODE = code;
+    stockByCode.set(code, stock);
+    statements.push(upsertStatement(env, "SAHAM", SAHAM_COLS, stock));
+  }
+
+  const valuations = Array.isArray(body.valuations) ? body.valuations : [];
+  for (const raw of valuations) {
+    const code = String(raw?.KODE || "").toUpperCase();
+    if (!codes.has(code)) continue;
+    statements.push(upsertStatement(env, "VALUASI", VALUASI_COLS, mergeFields(existing.VALUASI.get(code), { ...raw, KODE: code }, VALUASI_COLS)));
+  }
+  const technicals = Array.isArray(body.technicals) ? body.technicals : [];
+  for (const raw of technicals) {
+    const code = String(raw?.KODE || "").toUpperCase();
+    if (!codes.has(code)) continue;
+    statements.push(upsertStatement(env, "TEKNIKAL", TEKNIKAL_COLS, mergeFields(existing.TEKNIKAL.get(code), { ...raw, KODE: code }, TEKNIKAL_COLS)));
+  }
+  const scores = Array.isArray(body.scores) ? body.scores : [];
+  for (const raw of scores) {
+    const code = String(raw?.KODE || "").toUpperCase();
+    if (!codes.has(code)) continue;
+    statements.push(upsertStatement(env, "SKOR", SKOR_COLS, mergeFields(existing.SKOR.get(code), { ...raw, KODE: code }, SKOR_COLS)));
+  }
+  const dividends = Array.isArray(body.dividends) ? body.dividends : [];
+  for (const raw of dividends) {
+    const code = String(raw?.KODE || "").toUpperCase();
+    if (!codes.has(code)) continue;
+    const row = {
+      KODE: code,
+      TAHUN: Number(raw.TAHUN) || new Date().getFullYear(),
+      DPS: Number(raw.DPS) || 0,
+      TIPE: String(raw.TIPE || "TTM").slice(0, 8),
+    };
+    statements.push(env.DB.prepare(
+      `INSERT INTO DIVIDEN (KODE, TAHUN, DPS, TIPE) VALUES (?, ?, ?, ?)
+       ON CONFLICT(KODE, TAHUN, TIPE) DO UPDATE SET DPS = excluded.DPS`
+    ).bind(row.KODE, row.TAHUN, row.DPS, row.TIPE));
+  }
+
+  const params = body.params && typeof body.params === "object" ? body.params : {};
+  for (const [key, value] of Object.entries(params)) {
+    if (!key) continue;
+    statements.push(env.DB.prepare(
+      "INSERT INTO PARAM (KUNCI, NILAI) VALUES (?, ?) ON CONFLICT(KUNCI) DO UPDATE SET NILAI = excluded.NILAI"
+    ).bind(String(key).slice(0, 16), String(value ?? "").slice(0, 80)));
+  }
+
+  if (body.log && body.log.BULAN) {
+    if (!/^\d{4}-\d{2}$/.test(String(body.log.BULAN))) {
+      return json({ error: "Bulan log tidak valid." }, 400, request, env);
+    }
+    statements.push(logStatement(env, body.log, user.ID));
+  }
+
+  await runBatches(env, statements);
+  return json({
+    stocks: stocks.length,
+    valuations: valuations.length,
+    technicals: technicals.length,
+    scores: scores.length,
+    dividends: dividends.length,
+    log: body.log?.BULAN || null,
+    priceDate: params.HARGA_PER || params.TANGGAL_DATA || null,
+  }, 200, request, env);
+}
+
 /* --------------------------------------------------------------- prices */
 async function applyPriceMap(env, prices, { source = "Input manual (D1)", priceDate = today() } = {}) {
   const rows = await env.DB.prepare("SELECT KODE, HARGA, EPS, BVPS, DPS, FV, MCAP_T FROM SAHAM").all();
@@ -637,6 +791,10 @@ export default {
       if (url.pathname === "/api/admin/log-bulan" && request.method === "POST") {
         if (String(user.ROLE).toUpperCase() !== "ADMIN") return json({ error: "Hanya administrator." }, 403, request, env);
         return await uploadLogBulan(request, env, user);
+      }
+      if (url.pathname === "/api/admin/import-analysis" && request.method === "POST") {
+        if (String(user.ROLE).toUpperCase() !== "ADMIN") return json({ error: "Hanya administrator." }, 403, request, env);
+        return await importAnalysis(request, env, user);
       }
       if (url.pathname.startsWith("/api/transactions")
         && String(user.ROLE).toUpperCase() === "ADMIN"

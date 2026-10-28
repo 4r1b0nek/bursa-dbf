@@ -7,6 +7,7 @@ import * as C from "./charts.js";
 import * as Auth from "./auth.js";
 import * as API from "./api.js";
 import { parseDbf } from "./dbf.js";
+import { parseAnalysisWorkbook } from "./excel.js";
 import {
   esc, num, rupiah, compactRp, pct, pctRaw, signClass, dateID, bytes as fmtBytes,
   isNum, mean, clamp,
@@ -190,7 +191,7 @@ function showLogin(message = "", tone = "error") {
       <div class="auth-card">
         <div class="auth-brand">
           <span class="brand-mark" aria-hidden="true">${icon("database")}</span>
-          <div><b>Bursa <span>DBF</span></b><small>Analisis 9 saham BEI</small></div>
+          <div><b>Bursa <span>DBF</span></b><small>Analisis saham BEI</small></div>
         </div>
         <h1>Masuk ke aplikasi</h1>
         <p class="auth-lede">Gunakan akun yang diberikan administrator. Sesi berlaku
@@ -508,8 +509,8 @@ function viewDashboard() {
   <section class="hero">
     <div class="hero-copy">
       <div class="eyebrow">Riset ekuitas · harga ${priceDate ? dateID(priceDate) : "—"}</div>
-      <h1>Sembilan saham. <em>Satu database</em> yang bisa dibawa.</h1>
-      <p class="lede">Dashboard analisis fundamental, valuasi, dividen, dan portofolio untuk sembilan emiten BEI.
+      <h1>${stocks.length} saham. <em>Satu database</em> yang bisa dibawa.</h1>
+      <p class="lede">Dashboard analisis fundamental, valuasi, dividen, dan portofolio untuk ${stocks.length} emiten BEI.
         ${DB.apiMode
           ? "Data dibaca dari <b>SQLite D1</b> melalui API terautentikasi — browser tidak menerima file database."
           : "Semua angka dibaca dari tabel <b>DBF</b> — format basis data yang bisa dibuka Excel, LibreOffice, atau Python."}</p>
@@ -1088,14 +1089,14 @@ function viewLogBulan() {
   const latest = rows[0];
   const actions = Auth.isAdmin()
     ? `<div class="wrap-gap">
-        <button class="btn btn-primary" data-action="log-upload">${icon("database")} Upload DBF</button>
-        <input id="log-upload-input" type="file" accept=".dbf" hidden>
+        <button class="btn btn-primary" data-action="log-upload">${icon("database")} Upload Data</button>
+        <input id="log-upload-input" type="file" accept=".xlsx,.xls" hidden>
       </div>`
     : "";
   const kpis = latest
     ? `<section class="grid grid-4 section">
         ${kpi("IHSG", num(latest.IHSG, 2), dateID(latest.TGL), "chart", "rgba(15,118,110,.14)")}
-        ${kpi("Dividend yield", `${num(latest.YIELD, 2)}%`, "Rata-rata 9 emiten", "percent", "rgba(14,165,233,.12)")}
+        ${kpi("Dividend yield", `${num(latest.YIELD, 2)}%`, `Rata-rata ${DB.rows("SAHAM").length} emiten`, "percent", "rgba(14,165,233,.12)")}
         ${kpi("Margin of safety", `${num(latest.MOS, 2)}%`, "Rata-rata", "shield", "rgba(4,120,87,.14)")}
         ${kpi("Skor analisis", num(latest.SKOR, 1), `${num(latest.JML_MURAH, 0)} murah · ${num(latest.JML_BUY, 0)} buy`, "layers", "rgba(180,83,9,.13)")}
       </section>`
@@ -1114,7 +1115,7 @@ function viewLogBulan() {
 
   return `
   ${sectionHead("Log analisis bulanan",
-    "Catatan kondisi pasar dan hasil analisis per bulan. Admin dapat mengunggah DBF; semua user dapat melihat.",
+    "Catatan kondisi pasar dan hasil analisis per bulan. Admin dapat mengunggah Excel Dashboard; semua user dapat melihat.",
     actions)}
   ${kpis}
   <div class="card flush">
@@ -1138,22 +1139,11 @@ async function handleLogUpload(event) {
   input.value = "";
   if (!file) return;
   try {
-    const parsed = parseDbf(await file.arrayBuffer());
-    if (!parsed.rows.length) throw new Error("File DBF tidak berisi data.");
-    const rows = parsed.rows.map((row) => ({
-      BULAN: row.BULAN,
-      TGL: row.TGL,
-      IHSG: row.IHSG,
-      YIELD: row.YIELD,
-      MOS: row.MOS,
-      JML_MURAH: row.JML_MURAH,
-      JML_BUY: row.JML_BUY,
-      SKOR: row.SKOR,
-      CATATAN: row.CATATAN,
-    }));
-    const result = await API.uploadLogBulan(rows);
-    DB.setLogBulan(result.rows || []);
-    toast(`${result.uploaded || rows.length} baris log diunggah ke D1`);
+    const analysis = parseAnalysisWorkbook(await file.arrayBuffer());
+    const result = await API.importAnalysis(analysis);
+    await DB.loadApi();
+    await DB.loadLogBulan();
+    toast(`${result.stocks} saham diperbarui · log ${result.log || analysis.log?.BULAN || "bulan ini"} dibuat`);
     refresh();
   } catch (err) {
     toast(`Gagal upload: ${err.message}`, "err");
@@ -1299,7 +1289,7 @@ function viewSimulation() {
           <div class="field">
             <label for="sim-source">Ambil yield dari ${DB.apiMode ? "data D1" : "DBF"}</label>
             <select id="sim-source" name="divYieldSource">
-              <option value="avg">Rata-rata 9 emiten</option>
+              <option value="avg">Rata-rata ${stocks.length} emiten</option>
               ${stocks.map((s) => `<option value="${esc(s.KODE)}">${esc(s.KODE)} — ${pct(s.DY, 1)}</option>`).join("")}
             </select>
           </div>
@@ -1613,7 +1603,7 @@ async function onClick(e) {
     return;
   }
   if (action === "price-refresh") {
-    if (!window.confirm("Ambil harga terbaru 9 emiten dari Yahoo Finance dan simpan ke D1?")) return;
+    if (!window.confirm(`Ambil harga terbaru ${DB.rows("SAHAM").length} emiten dari Yahoo Finance dan simpan ke D1?`)) return;
     const original = el.innerHTML;
     el.disabled = true;
     el.textContent = "Mengambil Yahoo…";
