@@ -368,7 +368,7 @@ function viewTitle(view) {
     saham: "Analisis saham",
     portofolio: "Portofolio",
     simulasi: "Simulasi investasi",
-    "log-bulan": "Log analisis bulanan",
+    "log-bulan": "Riwayat upload data Excel",
     database: "Database DBF",
     pengguna: "Manajemen pengguna",
   }[view] || "Bursa DBF";
@@ -1111,23 +1111,24 @@ function viewLogBulan() {
     <td class="num">${num(row.JML_BUY, 0)}</td>
     <td class="num">${num(row.SKOR, 1)}</td>
     <td class="small muted">${esc(row.CATATAN || "—")}</td>
+    <td class="nowrap muted">${row.CREATED_AT ? dateID(row.CREATED_AT) : "—"}</td>
   </tr>`).join("");
 
   return `
-  ${sectionHead("Log analisis bulanan",
-    "Catatan kondisi pasar dan hasil analisis per bulan. Admin dapat mengunggah Excel Dashboard; semua user dapat melihat.",
+  ${sectionHead("Riwayat upload data Excel",
+    "Setiap unggahan Excel Dashboard memperbarui data saham dan mencatat log bulanannya. Admin dapat mengunggah; semua user dapat melihat.",
     actions)}
   ${kpis}
   <div class="card flush">
     <div class="card-head" style="padding:18px 20px 0">
-      <div><h3>Riwayat bulanan</h3><p>${rows.length} bulan tersimpan di D1.</p></div>
+      <div><h3>Data unggahan</h3><p>${rows.length} unggahan tersimpan di D1.</p></div>
       <span class="chip brand">${Auth.isAdmin() ? "ADMIN UPLOAD" : "READ-ONLY"}</span>
     </div>
     <div class="table-wrap mt-2">
       <table class="data">
         <thead><tr><th>Bulan</th><th>Tanggal</th><th class="num">IHSG</th><th class="num">Yield</th><th class="num">MoS</th>
-        <th class="num">Murah</th><th class="num">Buy</th><th class="num">Skor</th><th>Catatan</th></tr></thead>
-        <tbody>${tableRows || `<tr><td colspan="9" class="muted center" style="padding:28px">Belum ada log bulanan.</td></tr>`}</tbody>
+        <th class="num">Murah</th><th class="num">Buy</th><th class="num">Skor</th><th>Catatan</th><th>Diunggah</th></tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="10" class="muted center" style="padding:28px">Belum ada data unggahan.</td></tr>`}</tbody>
       </table>
     </div>
   </div>`;
