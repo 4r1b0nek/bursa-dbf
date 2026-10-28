@@ -43,6 +43,8 @@ tidak memerlukan server, build step, atau basis data tambahan.
   menonaktifkan/mengaktifkan akun. Setiap aksi sensitif diverifikasi ulang dengan password admin.
 - **Log bulanan** — admin mengunggah file `LOG_BULAN.DBF`; seluruh user dapat melihat
   riwayat IHSG, yield, MoS, jumlah saham murah/buy, skor, dan catatan per bulan.
+- **PWA Android** — dapat dipasang ke layar utama, tampil standalone, dan menyimpan
+  app shell untuk dibuka saat offline. Data D1 tetap memerlukan internet.
 - **Database** — penjelajah 9 tabel DBF: struktur field, header DBF, pratinjau data,
   unduh satu tabel / ZIP, impor `.DBF`, dan simpan langsung ke folder lokal.
 - **Responsif** — dipakai nyaman di desktop maupun ponsel.
@@ -98,6 +100,23 @@ Tersedia backend terpisah di **Cloudflare Worker + D1**:
 Frontend sudah memakai API ini secara default: `store.js` memanggil `/api/bootstrap`,
 `auth.js` memakai `/api/login`, dan transaksi/pengguna dikirim ke Worker. Tambahkan
 `?mode=dbf` pada URL untuk fallback ke aplikasi DBF lama.
+
+## PWA di Android
+
+Aplikasi sudah dapat dipasang sebagai **Progressive Web App**:
+
+1. Buka https://4r1b0nek.github.io/bursa-dbf/ di **Chrome Android**.
+2. Login, lalu tunggu beberapa saat.
+3. Klik tombol **Pasang** di kanan atas, atau menu Chrome → **Add to Home screen**.
+4. Aplikasi muncul sebagai ikon **Bursa DBF** dan terbuka tanpa address bar.
+
+Yang tersedia:
+
+- `manifest.webmanifest` — nama, ikon 192/512/maskable, shortcut, standalone.
+- `sw.js` — cache app shell; tidak menyimpan API D1 atau file DBF.
+- `assets/js/pwa.js` — registrasi service worker dan tombol Pasang.
+- Offline: halaman login/app shell tetap terbuka; data D1 memerlukan koneksi.
+- iOS: gunakan **Share → Add to Home Screen** (tanpa prompt khusus).
 
 ## Jalankan secara lokal
 
@@ -304,12 +323,16 @@ Angka kunci pada snapshot analisis 21 Oktober 2026:
 ```text
 .
 ├── index.html                  # shell aplikasi
+├── manifest.webmanifest        # manifest PWA Android
+├── sw.js                       # service worker app shell
 ├── assets/
 │   ├── css/style.css           # design system
+│   ├── icons/                  # ikon PWA 192/512/maskable/apple
 │   └── js/
 │       ├── app.js              # routing, view, form transaksi, login & pengguna
 │       ├── auth.js             # sesi, PBKDF2, login, CRUD pengguna & role
-│       ├── store.js            # load DBF, localStorage, portofolio, simulasi
+│       ├── pwa.js              # registrasi service worker + install prompt
+│       ├── store.js            # load DBF/API, portofolio, simulasi
 │       ├── dbf.js              # pembaca & penulis DBF
 │       ├── charts.js           # grafik SVG tanpa dependensi
 │       ├── zip.js              # penulis ZIP (store) untuk ekspor
@@ -320,6 +343,7 @@ Angka kunci pada snapshot analisis 21 Oktober 2026:
 │   ├── update_harga_live.py    # ambil harga Yahoo Finance → tulis DBF
 │   ├── dbf_writer.py           # penulis/pembaca DBF untuk build
 │   ├── data.py, model.py       # dataset + model valuasi (sumber angka)
+│   ├── make_icons.py           # membuat ikon PWA dari Pillow
 │   ├── test_dbf.mjs            # uji roundtrip byte-identik
 │   ├── test_app.mjs            # uji join data, portofolio, simulasi, grafik
 │   ├── test_auth.mjs           # uji login, role, expiry, CRUD pengguna

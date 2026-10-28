@@ -208,6 +208,9 @@ function showLogin(message = "", tone = "error") {
           <button class="btn btn-primary" type="submit" id="login-submit">${icon("arrow")} Masuk</button>
         </form>
         <div class="auth-lock">${icon("shield")} Akses terbatas · hubungi admin jika akun kedaluwarsa</div>
+        <button class="btn btn-ghost" type="button" data-install-app hidden style="width:100%;margin-top:14px">
+          ${icon("download")} Pasang aplikasi
+        </button>
         <p class="auth-note">${DB.apiMode
           ? "Login diverifikasi oleh server Cloudflare D1. Token berlaku 8 jam dan tidak disimpan permanen."
           : "Aplikasi statis: login ini mengatur tampilan, bukan pengganti autentikasi server. Jangan gunakan password penting."}</p>
