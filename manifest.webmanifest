@@ -48,8 +48,8 @@
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "Log Bulanan",
-      "short_name": "Log",
+      "name": "Riwayat Upload",
+      "short_name": "Upload",
       "url": "./#/log-bulan",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     }

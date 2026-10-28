@@ -40,9 +40,9 @@ tidak memerlukan server, build step, atau basis data tambahan.
   berlaku akun (kedaluwarsa otomatis ditolak).
 - **Manajemen pengguna** — admin dapat membuat, mengubah, mereset password, dan
   menonaktifkan/mengaktifkan akun. Setiap aksi sensitif diverifikasi ulang dengan password admin.
-- **Log bulanan** — admin mengunggah **Excel Dashboard** (`.xlsx`); data saham, valuasi,
+- **Riwayat upload** — admin mengunggah **Excel Dashboard** (`.xlsx`); data saham, valuasi,
   teknikal, dan log bulanan diperbarui sekaligus. Seluruh user dapat melihat riwayat IHSG,
-  yield, MoS, jumlah saham murah/buy, skor, dan catatan per bulan.
+  yield, MoS, jumlah saham murah/buy, skor, catatan, dan waktu unggah.
 - **PWA Android** — dapat dipasang ke layar utama, tampil standalone, dan menyimpan
   app shell untuk dibuka saat offline. Data D1 tetap memerlukan internet.
 - **Database** — penjelajah 9 tabel DBF: struktur field, header DBF, pratinjau data,
