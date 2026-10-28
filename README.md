@@ -105,19 +105,24 @@ Frontend sudah memakai API ini secara default: `store.js` memanggil `/api/bootst
 
 Workbook yang sudah dilengkapi kolom aplikasi:
 
-[**Dashboard_Simulator_14_Saham_Updated.xlsx**](docs/Dashboard_Simulator_14_Saham_Updated.xlsx)
+[**Dashboard_Simulator_14_Saham_v2.xlsx**](docs/Dashboard_Simulator_14_Saham_v2.xlsx)
 
 Kolom/sheet tambahan:
 
 - `Dashboard`: ROA, DER, EV/EBITDA, level akumulasi/beli/target/cut loss, ringkasan,
   market cap, PM/OM, CR/ICR, FCF, Debt, Equity, Cash.
 - `Valuasi & Skenario`: DDM, PB wajar, FV low/high, DDM low/high.
+- `Data Keuangan` v2: tabel tidy `KODE-TAHUN` dengan pendapatan, laba, EPS, DPS,
+  aset, ekuitas, utang, kas, EBITDA, FCF.
+- `Ringkasan 5 Tahun`: CAGR pendapatan/laba, ROE, DER, PM.
 - `Skor`: FUND, VAL, DIV, TECH, RISK, PROS, TOTAL (0–10 per faktor).
 - `Dividen`: riwayat DPS 2022–2026.
 - `Historik`: placeholder untuk 10 minggu harga.
+- `Cara Update` mencatat `VERSI_TEMPLATE = 2.0`.
 
-Catatan: ROA/DER/EV/EBITDA dan skor faktor untuk emiten baru tetap perlu diisi manual;
-jika kosong, aplikasi menampilkan “—” atau “Skor faktor belum tersedia”.
+Parser aplikasi mendeteksi format `Data Keuangan` baru dan tetap menerima file lama
+(fallback ke kolom Dashboard). ROA/DER/EV/EBITDA dihitung otomatis jika aset/ekuitas/
+utang/EBITDA tersedia; skor faktor emiten baru tetap perlu diisi manual.
 
 ## PWA di Android
 

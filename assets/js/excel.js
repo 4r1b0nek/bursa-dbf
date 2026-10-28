@@ -132,6 +132,60 @@ export function parseAnalysisWorkbook(buffer) {
   }).filter((s) => s.KODE && s.NAMA);
 
   const byCode = new Map(stocks.map((s) => [s.KODE, s]));
+
+  // Data Keuangan versi baru: satu baris per emiten + tahun.
+  const finGrid = wb.Sheets["Data Keuangan"]
+    ? XLSX.utils.sheet_to_json(wb.Sheets["Data Keuangan"], { header: 1, defval: null, raw: true })
+    : [];
+  const finHeader = findHeader(finGrid, (row) => row[0] === "KODE" && row.includes("TAHUN") && row.includes("PERIODE"));
+  if (finHeader >= 0) {
+    const finRows = table(finGrid, finHeader)
+      .filter((row) => /^[A-Z0-9]{4}$/.test(text(row.KODE).toUpperCase()))
+      .map((row) => ({
+        KODE: text(row.KODE).toUpperCase(),
+        TAHUN: n(row.TAHUN),
+        PERIODE: text(row.PERIODE).toUpperCase(),
+        MATA_UANG: text(row.MATA_UANG).toUpperCase(),
+        SATUAN: text(row.SATUAN),
+        PENDAPATAN: n(row.PENDAPATAN),
+        LABA_OPERASI: n(row.LABA_OPERASI),
+        LABA_BERSIH: n(row.LABA_BERSIH),
+        TOTAL_ASET: n(row.TOTAL_ASET),
+        TOTAL_EKUITAS: n(row.TOTAL_EKUITAS),
+        TOTAL_UTANG: n(row.TOTAL_UTANG),
+        KAS: n(row.KAS),
+        EBITDA: n(row.EBITDA),
+        FCF: n(row.FCF),
+      }));
+    const latestByCode = new Map();
+    for (const row of finRows) {
+      const current = latestByCode.get(row.KODE);
+      const rank = (r) => (r.PERIODE === "TTM" ? 9999 : (r.TAHUN || 0));
+      if (!current || rank(row) >= rank(current)) latestByCode.set(row.KODE, row);
+    }
+    for (const [code, row] of latestByCode) {
+      const stock = byCode.get(code);
+      if (!stock) continue;
+      if (n(stock.ROA) === null && row.LABA_BERSIH && row.TOTAL_ASET) {
+        stock.ROA = (row.LABA_BERSIH / row.TOTAL_ASET) * 100;
+      }
+      if (n(stock.DER) === null && row.TOTAL_UTANG && row.TOTAL_EKUITAS) {
+        stock.DER = row.TOTAL_UTANG / row.TOTAL_EKUITAS;
+      }
+      if (n(stock.PM) === null && row.LABA_BERSIH && row.PENDAPATAN) {
+        stock.PM = (row.LABA_BERSIH / row.PENDAPATAN) * 100;
+      }
+      if (n(stock.OM) === null && row.LABA_OPERASI && row.PENDAPATAN) {
+        stock.OM = (row.LABA_OPERASI / row.PENDAPATAN) * 100;
+      }
+      if (n(stock.EVEBITDA) === null && row.EBITDA && row.MATA_UANG === "IDR") {
+        const mcap = n(stock.MCAP_T);
+        const debt = n(row.TOTAL_UTANG);
+        const cash = n(row.KAS);
+        if (mcap && debt !== null) stock.EVEBITDA = ((mcap + debt - (cash || 0)) / row.EBITDA);
+      }
+    }
+  }
   const valuationRows = valuations.map((row) => {
     const code = text(row.Kode).toUpperCase();
     const s = byCode.get(code);
