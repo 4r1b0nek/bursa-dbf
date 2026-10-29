@@ -8,6 +8,7 @@ import * as Auth from "./auth.js";
 import * as API from "./api.js";
 import { parseDbf } from "./dbf.js";
 import { parseAnalysisWorkbook } from "./excel.js";
+import { renderHelp } from "./help.js";
 import {
   esc, num, rupiah, compactRp, pct, pctRaw, signClass, dateID, bytes as fmtBytes,
   isNum, mean, clamp,
@@ -66,6 +67,7 @@ const ui = {
   dbTable: "SAHAM",
   showAll: false,
   portfolioUser: "all",
+  helpSection: "manual",
   sim: null,
   txEditing: null,
   forceModal: false,
@@ -338,8 +340,9 @@ function route() {
   }
   const raw = (location.hash || "#/ringkasan").replace(/^#\/?/, "");
   const [viewRaw, paramRaw] = raw.split("/");
-  const view = ["ringkasan", "saham", "portofolio", "simulasi", "log-bulan", "database", "pengguna"].includes(viewRaw)
+  const view = ["ringkasan", "saham", "portofolio", "simulasi", "log-bulan", "bantuan", "database", "pengguna"].includes(viewRaw)
     ? viewRaw : "ringkasan";
+  ui.helpSection = view === "bantuan" ? (paramRaw || "manual") : "manual";
   if (view === "database" && DB.apiMode) {
     location.hash = "#/ringkasan";
     return;
@@ -369,6 +372,7 @@ function viewTitle(view) {
     portofolio: "Portofolio",
     simulasi: "Simulasi investasi",
     "log-bulan": "Riwayat upload data Excel",
+    bantuan: "Bantuan",
     database: "Database DBF",
     pengguna: "Manajemen pengguna",
   }[view] || "Bursa DBF";
@@ -381,6 +385,7 @@ function render() {
     portofolio: viewPortfolio,
     simulasi: viewSimulation,
     "log-bulan": viewLogBulan,
+    bantuan: viewHelp,
     database: viewDatabase,
     pengguna: viewUsers,
   };
@@ -447,6 +452,10 @@ function afterRender() {
 }
 
 /* ------------------------------------------------------------------ dashboard */
+function viewHelp() {
+  return renderHelp(ui.helpSection);
+}
+
 function viewDashboard() {
   const stocks = DB.stockList();
   if (!stocks.length) {

@@ -1,5 +1,5 @@
 ﻿/* Service worker Bursa DBF â€” cache app shell, never cache API/DBF. */
-const CACHE = "bursa-dbf-shell-v4";
+const CACHE = "bursa-dbf-shell-v5";
 const SCOPE = self.registration.scope;
 const INDEX = new URL("index.html", SCOPE).href;
 const ASSETS = [
@@ -16,6 +16,7 @@ const ASSETS = [
   "assets/js/zip.js",
   "assets/js/format.js",
   "assets/js/pwa.js",
+  "assets/js/help.js",
   "assets/js/excel.js",
   "assets/vendor/xlsx.full.min.js",
   "assets/icons/icon-192.png",
@@ -80,5 +81,6 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(request))
   );
 });
+
 
 

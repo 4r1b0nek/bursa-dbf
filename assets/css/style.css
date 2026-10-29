@@ -692,3 +692,15 @@ body.no-scroll { overflow: hidden; }
 
 body.auth-locked { overflow: hidden; }
 
+
+.help-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 2px; }
+.help-tabs a { padding: 7px 13px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 12px; font-weight: 700; }
+.help-tabs a:hover { color: var(--ink-2); text-decoration: none; }
+.help-tabs a.active { background: var(--brand-tint); border-color: #c9ece6; color: var(--brand-dark); }
+.help-list { margin: 10px 0 0; padding-left: 20px; display: grid; gap: 7px; line-height: 1.6; }
+.help-list li { font-size: 12.5px; color: var(--ink-2); }
+.faq { border-top: 1px solid var(--line); padding: 11px 0; }
+.faq:first-child { border-top: 0; }
+.faq summary { cursor: pointer; font-weight: 700; font-size: 12.5px; color: var(--ink-2); }
+.faq p { margin: 8px 0 0; font-size: 12px; color: var(--muted); line-height: 1.65; }
+
