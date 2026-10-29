@@ -124,6 +124,13 @@ Parser aplikasi mendeteksi format `Data Keuangan` baru dan tetap menerima file l
 (fallback ke kolom Dashboard). ROA/DER/EV/EBITDA dihitung otomatis jika aset/ekuitas/
 utang/EBITDA tersedia; skor faktor emiten baru tetap perlu diisi manual.
 
+## Kamus saham
+
+Daftar istilah dan rumus yang dipakai aplikasi (PE, PB, DER, ROE, DDM, MoS, RSI, skor,
+CAGR, dan lainnya):
+
+[**docs/KAMUS-SAHAM.md**](docs/KAMUS-SAHAM.md)
+
 ## PWA di Android
 
 Aplikasi sudah dapat dipasang sebagai **Progressive Web App**:
