@@ -88,6 +88,7 @@ function kamus() {
       <tbody>
         <tr><td><b>EPS</b></td><td>Laba per lembar</td><td class="mono">Laba bersih ÷ jumlah saham</td></tr>
         <tr><td><b>BVPS</b></td><td>Nilai buku per lembar</td><td class="mono">Ekuitas ÷ jumlah saham</td></tr>
+        <tr><td><b>DPS</b></td><td>Dividen tunai per lembar (12 bulan/TTM)</td><td class="mono">Total dividen ÷ jumlah saham</td></tr>
         <tr><td><b>PE</b></td><td>Price to earnings</td><td class="mono">Harga ÷ EPS</td></tr>
         <tr><td><b>PB</b></td><td>Price to book</td><td class="mono">Harga ÷ BVPS</td></tr>
         <tr><td><b>DY</b></td><td>Dividend yield</td><td class="mono">DPS ÷ Harga</td></tr>
@@ -98,6 +99,32 @@ function kamus() {
         <tr><td><b>CAGR</b></td><td>Pertumbuhan majemuk</td><td class="mono">(akhir ÷ awal)^(1/n) − 1</td></tr>
       </tbody>
     </table></div>
+  </div>
+
+  <div class="card mt-3">
+    <h3>Contoh simulasi: BMRI</h3>
+    <p>Contoh memakai data BMRI 28 Oktober 2026. 1 lot = 100 lembar; simulasi membeli 10 lot.</p>
+    <div class="table-wrap mt-2"><table class="data">
+      <thead><tr><th>Data / rumus</th><th class="num">Nilai</th></tr></thead>
+      <tbody>
+        <tr><td>Harga</td><td class="num">Rp3.790</td></tr>
+        <tr><td>EPS</td><td class="num">Rp687,14</td></tr>
+        <tr><td>BVPS</td><td class="num">Rp3.244,40</td></tr>
+        <tr><td>DPS TTM</td><td class="num">Rp476,96</td></tr>
+        <tr><td>PE = Harga ÷ EPS</td><td class="num">5,52x</td></tr>
+        <tr><td>PB = Harga ÷ BVPS</td><td class="num">1,17x</td></tr>
+        <tr><td>Dividend yield = DPS ÷ Harga</td><td class="num">12,58%</td></tr>
+        <tr><td>Payout = DPS ÷ EPS</td><td class="num">69,4%</td></tr>
+        <tr><td>Nilai wajar model</td><td class="num">Rp6.174,41</td></tr>
+        <tr><td>MoS = (FV − Harga) ÷ FV</td><td class="num">38,6%</td></tr>
+        <tr><td>Modal 10 lot = 1.000 × Rp3.790</td><td class="num">Rp3.790.000</td></tr>
+        <tr><td>Dividen 10 lot = 1.000 × Rp476,96</td><td class="num">Rp476.960</td></tr>
+        <tr><td>Yield on cost = Rp476.960 ÷ Rp3.790.000</td><td class="num">12,58%</td></tr>
+        <tr><td>Potensi ke nilai wajar = 1.000 × (6.174,41 − 3.790)</td><td class="num">Rp2.384.410</td></tr>
+      </tbody>
+    </table></div>
+    <p class="small muted mt-2">Angka sebelum pajak, fee, dan perubahan harga. MoS positif bukan jaminan harga naik;
+    ini hanya ilustrasi cara memakai istilah di kamus.</p>
   </div>
 
   <div class="card mt-3">
