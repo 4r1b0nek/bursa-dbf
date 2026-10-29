@@ -184,7 +184,7 @@ function showLogin(message = "", tone = "error") {
   document.body.classList.add("auth-locked");
   const box = document.getElementById("user-box");
   if (box) box.hidden = true;
-  for (const id of ["nav-database", "nav-users", "download-dbf"]) {
+  for (const id of ["nav-database", "nav-admin", "download-dbf"]) {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   }
@@ -292,10 +292,10 @@ function applyRoleUI(user) {
   if (role) role.textContent = admin ? "Administrator" : "User";
   if (avatar) avatar.textContent = String(user.NAMA || user.USERNAME || "?").slice(0, 1).toUpperCase();
   const navDb = document.getElementById("nav-database");
-  const navUsers = document.getElementById("nav-users");
+  const navAdmin = document.getElementById("nav-admin");
   const download = document.getElementById("download-dbf");
   if (navDb) navDb.hidden = !admin || DB.apiMode;
-  if (navUsers) navUsers.hidden = !admin;
+  if (navAdmin) navAdmin.hidden = !admin;
   if (download) download.hidden = !admin || DB.apiMode;
 }
 
@@ -307,6 +307,11 @@ function requireAdmin() {
 
 function bindGlobal() {
   document.addEventListener("click", onClick);
+  document.addEventListener("click", (e) => {
+    const admin = document.getElementById("nav-admin");
+    if (!admin?.open) return;
+    if (e.target.closest?.(".nav-admin-menu a") || !admin.contains(e.target)) admin.open = false;
+  });
   document.addEventListener("change", (e) => {
     const select = e.target.closest?.('[data-action="portfolio-filter"]');
     if (!select) return;
@@ -347,7 +352,7 @@ function route() {
     location.hash = "#/ringkasan";
     return;
   }
-  if ((view === "database" || view === "pengguna") && !Auth.isAdmin()) {
+  if ((view === "database" || view === "pengguna" || view === "log-bulan") && !Auth.isAdmin()) {
     toast("Halaman ini hanya untuk administrator.", "err");
     location.hash = "#/ringkasan";
     return;
@@ -395,6 +400,12 @@ function render() {
     if (a.dataset.nav === ui.view) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
+  const adminNav = document.getElementById("nav-admin");
+  if (adminNav) {
+    const adminView = ui.view === "log-bulan" || ui.view === "pengguna";
+    adminNav.classList.toggle("active", adminView);
+    adminNav.open = false;
+  }
   syncChrome();
   updateFooterNote();
   afterRender();
