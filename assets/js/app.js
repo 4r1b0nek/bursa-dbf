@@ -376,7 +376,7 @@ function route() {
 
 function viewTitle(view) {
   return {
-    ringkasan: "Ringkasan analisis",
+    ringkasan: "Dashboard",
     saham: "Analisis saham",
     portofolio: "Portofolio",
     simulasi: "Simulasi investasi",

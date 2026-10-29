@@ -36,8 +36,8 @@
   ],
   "shortcuts": [
     {
-      "name": "Ringkasan",
-      "short_name": "Ringkasan",
+      "name": "Dashboard",
+      "short_name": "Dashboard",
       "url": "./#/ringkasan",
       "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }]
     },

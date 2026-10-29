@@ -22,7 +22,7 @@ function manual() {
       <table class="data">
         <thead><tr><th>Fitur</th><th>ADMIN</th><th>USER</th></tr></thead>
         <tbody>
-          <tr><td>Ringkasan, Saham, Portofolio, Simulasi, Bantuan</td><td class="center">✓</td><td class="center">✓</td></tr>
+          <tr><td>Dashboard, Saham, Portofolio, Simulasi, Bantuan</td><td class="center">✓</td><td class="center">✓</td></tr>
           <tr><td>Tambah/ubah transaksi portofolio sendiri</td><td class="center">—</td><td class="center">✓</td></tr>
           <tr><td>Melihat semua portofolio user</td><td class="center">✓</td><td class="center">—</td></tr>
           <tr><td>Update harga, upload Excel, kelola pengguna</td><td class="center">✓</td><td class="center">—</td></tr>
@@ -35,7 +35,7 @@ function manual() {
   <div class="card mt-3">
     <h3>2. Halaman aplikasi</h3>
     <ul class="help-list">
-      <li><b>Ringkasan</b> — skor, margin of safety, dividend yield, peta valuasi, dan tesis singkat.</li>
+      <li><b>Dashboard</b> — skor, margin of safety, dividend yield, peta valuasi, dan tesis singkat.</li>
       <li><b>Saham</b> — tabel 14 emiten; klik baris untuk membuka lembar analisis, valuasi, skenario, teknikal, dan dividen.</li>
       <li><b>Portofolio</b> — catat transaksi beli/jual, lihat biaya rata-rata, laba/rugi, alokasi, dan dividen.</li>
       <li><b>Bantuan</b> — Manual Book, Kamus Saham, FAQ, dan <b>Simulasi</b> investasi.</li>
