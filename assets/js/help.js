@@ -4,6 +4,7 @@ const TABS = [
   ["manual", "Manual Book"],
   ["kamus", "Kamus Saham"],
   ["faq", "FAQ"],
+  ["simulasi", "Simulasi"],
 ];
 
 function tabs(active) {
@@ -37,7 +38,8 @@ function manual() {
       <li><b>Ringkasan</b> — skor, margin of safety, dividend yield, peta valuasi, dan tesis singkat.</li>
       <li><b>Saham</b> — tabel 14 emiten; klik baris untuk membuka lembar analisis, valuasi, skenario, teknikal, dan dividen.</li>
       <li><b>Portofolio</b> — catat transaksi beli/jual, lihat biaya rata-rata, laba/rugi, alokasi, dan dividen.</li>
-      <li><b>Simulasi</b> — proyeksi setoran bulanan dengan reinvestasi dividen dan IRR.</li>
+      <li><b>Bantuan</b> — Manual Book, Kamus Saham, FAQ, dan <b>Simulasi</b> investasi.</li>
+      <li><b>Bantuan → Simulasi</b> — proyeksi setoran bulanan dengan reinvestasi dividen dan IRR.</li>
       <li><b>Riwayat Upload</b> — unggah Excel analisis (admin) dan lihat riwayat unggahan.</li>
       <li><b>Pengguna</b> — admin membuat, mengubah, menonaktifkan akun, dan mengatur masa berlaku.</li>
     </ul>
@@ -191,14 +193,20 @@ function faq() {
   </div>`;
 }
 
-export function renderHelp(section = "manual") {
-  const active = ["manual", "kamus", "faq"].includes(section) ? section : "manual";
-  const content = active === "kamus" ? kamus() : active === "faq" ? faq() : manual();
+export function renderHelp(section = "manual", simulationHtml = "") {
+  const active = ["manual", "kamus", "faq", "simulasi"].includes(section) ? section : "manual";
+  const content = active === "kamus"
+    ? kamus()
+    : active === "faq"
+      ? faq()
+      : active === "simulasi"
+        ? (simulationHtml || `<div class="card"><p>Simulasi belum tersedia.</p></div>`)
+        : manual();
   return `
   <div class="section-head">
     <div>
       <h2>Pusat Bantuan</h2>
-      <p>Manual penggunaan, istilah saham, dan pertanyaan yang sering muncul.</p>
+      <p>Manual penggunaan, istilah saham, pertanyaan umum, dan simulasi investasi.</p>
     </div>
   </div>
   ${tabs(active)}

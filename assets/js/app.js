@@ -347,6 +347,10 @@ function route() {
   const [viewRaw, paramRaw] = raw.split("/");
   const view = ["ringkasan", "saham", "portofolio", "simulasi", "log-bulan", "bantuan", "database", "pengguna"].includes(viewRaw)
     ? viewRaw : "ringkasan";
+  if (view === "simulasi") {
+    location.hash = "#/bantuan/simulasi";
+    return;
+  }
   ui.helpSection = view === "bantuan" ? (paramRaw || "manual") : "manual";
   if (view === "database" && DB.apiMode) {
     location.hash = "#/ringkasan";
@@ -445,7 +449,7 @@ function afterRender() {
     const rating = document.getElementById("f-rating");
     if (rating) rating.addEventListener("change", () => { ui.rating = rating.value; updateStockTable(); });
   }
-  if (ui.view === "simulasi") {
+  if (ui.view === "simulasi" || (ui.view === "bantuan" && ui.helpSection === "simulasi")) {
     const form = document.getElementById("sim-form");
     if (form) {
       form.addEventListener("input", onSimInput);
@@ -464,6 +468,7 @@ function afterRender() {
 
 /* ------------------------------------------------------------------ dashboard */
 function viewHelp() {
+  if (ui.helpSection === "simulasi") return renderHelp("simulasi", viewSimulation());
   return renderHelp(ui.helpSection);
 }
 
