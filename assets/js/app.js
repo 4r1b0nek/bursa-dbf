@@ -90,6 +90,7 @@ const ui = {
   dbTable: "SAHAM",
   showAll: false,
   portfolioUser: "all",
+  portfolioStock: null,
   helpSection: "manual",
   sim: null,
   txEditing: null,
@@ -339,6 +340,7 @@ function bindGlobal() {
     const select = e.target.closest?.('[data-action="portfolio-filter"]');
     if (!select) return;
     ui.portfolioUser = select.value;
+    ui.portfolioStock = null;
     render();
   });
   document.getElementById("skip-link")?.addEventListener("click", (e) => {
@@ -987,6 +989,11 @@ function viewPortfolio() {
     : DB.rows("TRANSAKSI");
   const p = DB.computePortfolio(sourceTx);
   const readOnly = adminView;
+  const selectedCode = ui.portfolioStock;
+  const journalTx = selectedCode
+    ? p.transactions.filter((tx) => tx.KODE === selectedCode).slice().sort((a, b) =>
+        String(b.TANGGAL).localeCompare(String(a.TANGGAL)) || Number(b.ID) - Number(a.ID))
+    : [];
   const hasPositions = p.positions.length > 0;
   const soldOut = !hasPositions && p.transactions.length > 0;
   const colors = C.DONUT_COLORS;
@@ -1020,7 +1027,7 @@ function viewPortfolio() {
             <th class="num">Nilai</th><th class="num">P/L</th><th class="num">Bobot</th><th class="num">Dividen/thn</th></tr></thead>
             <tbody>
               ${p.positions.map((pos) => `
-                <tr>
+                <tr class="clickable stock-row${selectedCode === pos.code ? " is-selected" : ""}" data-action="portfolio-stock" data-code="${esc(pos.code)}" title="Klik untuk melihat jurnal ${esc(pos.code)}">
                   <td><div class="ticker"><b>${esc(pos.code)}</b><small>${esc(pos.name)}</small></div></td>
                   <td class="num">${num(pos.lots, 0)}</td>
                   <td class="num">${num(pos.avg, 0)}</td>
@@ -1056,8 +1063,8 @@ function viewPortfolio() {
       </div>`
     : `<div class="card">${emptyState("Belum ada alokasi", "Alokasi muncul setelah ada posisi aktif.", "", "")}</div>`;
 
-  const txRows = p.transactions.length
-    ? p.transactions.map((tx) => {
+  const txRows = journalTx.length
+    ? journalTx.map((tx) => {
         const gross = (Number(tx.LOT) || 0) * 100 * (Number(tx.HARGA) || 0);
         const total = String(tx.JENIS).toUpperCase() === "JUAL" ? gross - (Number(tx.FEE) || 0) : gross + (Number(tx.FEE) || 0);
         const isBuy = String(tx.JENIS).toUpperCase() !== "JUAL";
@@ -1076,14 +1083,9 @@ function viewPortfolio() {
           <td class="num">${num(tx.FEE, 0)}</td>
           <td class="num strong">${rupiah(total)}</td>
           <td class="small muted preview-cell" title="${esc(meta.note || "")}">${esc(meta.note || "—")}</td>
-          <td class="num nowrap">
-            ${readOnly ? `<span class="small muted">—</span>` : `
-            <button class="btn btn-ghost btn-icon btn-sm" data-action="tx-edit" data-index="${tx._index}" aria-label="Ubah transaksi">${icon("edit")}</button>
-            <button class="btn btn-ghost btn-icon btn-sm" data-action="tx-del" data-index="${tx._index}" aria-label="Hapus transaksi">${icon("trash")}</button>`}
-          </td>
         </tr>`;
       }).join("")
-    : `<tr><td colspan="11" class="muted center" style="padding:28px">${readOnly ? "User ini belum memiliki transaksi." : "Belum ada transaksi. Catat pembelian pertama Anda."}</td></tr>`;
+    : `<tr><td colspan="10" class="muted center" style="padding:28px">${selectedCode ? `Belum ada transaksi untuk ${esc(selectedCode)}.` : "Klik salah satu saham di tabel kepemilikan untuk membuka jurnal."}</td></tr>`;
 
   const title = adminView ? "Portofolio user" : "Portofolio";
   const subtitle = adminView
@@ -1098,6 +1100,25 @@ function viewPortfolio() {
       ${Auth.isAdmin() && !DB.apiMode ? `<button class="btn btn-ghost" data-action="export-table" data-name="TRANSAKSI">${icon("download")} TRANSAKSI.DBF</button>` : ""}
     </div>`;
 
+  const journal = selectedCode
+    ? `<section class="card flush section" id="tx-journal">
+        <div class="card-head" style="padding:18px 20px 0">
+          <div><h3>Jurnal ${esc(selectedCode)}</h3><p>${journalTx.length} transaksi · urut dari transaksi terbaru.</p></div>
+          <button class="btn btn-ghost btn-sm" data-action="portfolio-stock-clear">${icon("x")} Tutup</button>
+        </div>
+        <div class="table-wrap mt-2">
+          <table class="data">
+            <thead><tr><th>Tanggal</th><th>Saham</th><th>Jenis</th><th>Tujuan</th><th class="num">Sell / Cut Loss</th><th class="num">Lot</th><th class="num">Harga</th>
+            <th class="num">Fee</th><th class="num">Total</th><th>Catatan</th></tr></thead>
+            <tbody>${txRows}</tbody>
+          </table>
+        </div>
+      </section>`
+    : `<div class="card section" id="tx-journal">${emptyState(
+        "Jurnal transaksi",
+        "Klik salah satu saham di tabel kepemilikan untuk melihat jurnal transaksi saham tersebut.",
+        "", "")}</div>`;
+
   return `
   ${sectionHead(title, subtitle, actions)}
   ${kpis}
@@ -1105,21 +1126,7 @@ function viewPortfolio() {
     ${holdings}
     ${allocation}
   </section>
-
-  <section class="card flush section">
-    <div class="card-head" style="padding:18px 20px 0">
-      <div><h3>Jurnal transaksi</h3><p>${p.transactions.length} baris tersimpan ${DB.apiMode ? "di D1" : "di TRANSAKSI.DBF"}${DB.state.dirty ? " · ada perubahan lokal" : ""}.</p></div>
-      ${readOnly ? `<span class="chip brand">READ-ONLY</span>` : `<button class="btn btn-ghost btn-sm" data-action="tx-clear">${icon("trash")} Hapus semua</button>`}
-    </div>
-    <div class="table-wrap mt-2">
-      <table class="data">
-        <thead><tr><th>Tanggal</th><th>Saham</th><th>Jenis</th><th>Tujuan</th><th class="num">Sell / Cut Loss</th><th class="num">Lot</th><th class="num">Harga</th>
-        <th class="num">Fee</th><th class="num">Total</th><th>Catatan</th><th class="num">Aksi</th></tr></thead>
-        <tbody>${txRows}</tbody>
-      </table>
-    </div>
-    <p class="table-hint" style="padding:0 20px">Geser tabel ke samping untuk melihat kolom lain.</p>
-  </section>
+  ${journal}
 
   <div class="callout mt-3">${icon("database")}
     <div><b>Penyimpanan.</b> ${readOnly
@@ -1583,6 +1590,20 @@ async function onClick(e) {
     return;
   }
 
+  if (action === "portfolio-stock") {
+    const code = el.dataset.code;
+    ui.portfolioStock = ui.portfolioStock === code ? null : code;
+    render();
+    if (ui.portfolioStock) {
+      requestAnimationFrame(() => document.getElementById("tx-journal")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+    return;
+  }
+  if (action === "portfolio-stock-clear") {
+    ui.portfolioStock = null;
+    render();
+    return;
+  }
   if (action === "logout") {
     openLogoutModal();
     return;

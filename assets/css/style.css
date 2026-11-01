@@ -281,6 +281,8 @@ table.data tbody tr:last-child td { border-bottom: 0; }
 table.data tbody tr.clickable { cursor: pointer; }
 table.data tbody tr.clickable:hover { background: #f8fbfd; }
 table.data tbody tr.clickable:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+table.data tbody tr.is-selected { background: var(--brand-tint); }
+table.data tbody tr.is-selected td { border-bottom-color: #c9ece6; }
 table.data td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.data td.strong { font-weight: 650; color: var(--ink); }
 table.data .ticker { display: flex; flex-direction: column; gap: 1px; min-width: 150px; }
