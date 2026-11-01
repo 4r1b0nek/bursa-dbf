@@ -55,6 +55,29 @@ const icon = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"
 /* ------------------------------------------------------------------ util UI */
 const RATING_TONE = { Menarik: "pos", Netral: "warn", "Kurang menarik": "neg" };
 const MODEL_LABEL = { bank: "Bank", cyclical: "Siklikal", utility: "Utilitas", insurer: "Asuransi", infra: "Infrastruktur" };
+const TX_PURPOSES = ["HOLD", "INVESTASI", "SWING", "HARIAN"];
+const TX_PURPOSE_TONE = { HOLD: "plain", INVESTASI: "pos", SWING: "warn", HARIAN: "neg" };
+
+/** Metadata rencana transaksi disimpan kompatibel di kolom CATATAN (maks 60). */
+function parseTxMeta(value) {
+  const raw = String(value || "");
+  const m = raw.match(/^\[\[(HOLD|INVESTASI|SWING|HARIAN):(\d*):(\d*)\]\]\s?/);
+  if (!m) return { tujuan: "HOLD", nilaiSell: null, cutloss: null, note: raw };
+  return {
+    tujuan: m[1],
+    nilaiSell: Number(m[2]) > 0 ? Number(m[2]) : null,
+    cutloss: Number(m[3]) > 0 ? Number(m[3]) : null,
+    note: raw.slice(m[0].length),
+  };
+}
+
+function buildTxNote(tujuan, nilaiSell, cutloss, note) {
+  const purpose = TX_PURPOSES.includes(tujuan) ? tujuan : "HOLD";
+  const sell = Number(nilaiSell) > 0 ? Math.round(Number(nilaiSell)) : 0;
+  const cut = Number(cutloss) > 0 ? Math.round(Number(cutloss)) : 0;
+  const prefix = `[[${purpose}:${sell}:${cut}]]`;
+  return `${prefix}${note ? ` ${note}` : ""}`.slice(0, 60);
+}
 
 const ui = {
   view: "ringkasan",
@@ -1038,15 +1061,21 @@ function viewPortfolio() {
         const gross = (Number(tx.LOT) || 0) * 100 * (Number(tx.HARGA) || 0);
         const total = String(tx.JENIS).toUpperCase() === "JUAL" ? gross - (Number(tx.FEE) || 0) : gross + (Number(tx.FEE) || 0);
         const isBuy = String(tx.JENIS).toUpperCase() !== "JUAL";
+        const meta = parseTxMeta(tx.CATATAN);
+        const plan = meta.nilaiSell || meta.cutloss
+          ? `Sell ${meta.nilaiSell ? rupiah(meta.nilaiSell) : "—"}<div class="tiny">CL ${meta.cutloss ? rupiah(meta.cutloss) : "—"}</div>`
+          : `<span class="muted">—</span>`;
         return `<tr>
           <td class="nowrap">${dateID(tx.TANGGAL)}</td>
           <td class="mono strong">${esc(tx.KODE)}</td>
           <td><span class="chip ${isBuy ? "pos" : "neg"}">${esc(tx.JENIS)}</span></td>
+          <td><span class="chip ${TX_PURPOSE_TONE[meta.tujuan] || "plain"}">${esc(meta.tujuan)}</span></td>
+          <td class="num small">${plan}</td>
           <td class="num">${num(tx.LOT, 0)}</td>
           <td class="num">${num(tx.HARGA, 0)}</td>
           <td class="num">${num(tx.FEE, 0)}</td>
           <td class="num strong">${rupiah(total)}</td>
-          <td class="small muted preview-cell" title="${esc(tx.CATATAN || "")}">${esc(tx.CATATAN || "—")}</td>
+          <td class="small muted preview-cell" title="${esc(meta.note || "")}">${esc(meta.note || "—")}</td>
           <td class="num nowrap">
             ${readOnly ? `<span class="small muted">—</span>` : `
             <button class="btn btn-ghost btn-icon btn-sm" data-action="tx-edit" data-index="${tx._index}" aria-label="Ubah transaksi">${icon("edit")}</button>
@@ -1054,7 +1083,7 @@ function viewPortfolio() {
           </td>
         </tr>`;
       }).join("")
-    : `<tr><td colspan="9" class="muted center" style="padding:28px">${readOnly ? "User ini belum memiliki transaksi." : "Belum ada transaksi. Catat pembelian pertama Anda."}</td></tr>`;
+    : `<tr><td colspan="11" class="muted center" style="padding:28px">${readOnly ? "User ini belum memiliki transaksi." : "Belum ada transaksi. Catat pembelian pertama Anda."}</td></tr>`;
 
   const title = adminView ? "Portofolio user" : "Portofolio";
   const subtitle = adminView
@@ -1084,7 +1113,7 @@ function viewPortfolio() {
     </div>
     <div class="table-wrap mt-2">
       <table class="data">
-        <thead><tr><th>Tanggal</th><th>Saham</th><th>Jenis</th><th class="num">Lot</th><th class="num">Harga</th>
+        <thead><tr><th>Tanggal</th><th>Saham</th><th>Jenis</th><th>Tujuan</th><th class="num">Sell / Cut Loss</th><th class="num">Lot</th><th class="num">Harga</th>
         <th class="num">Fee</th><th class="num">Total</th><th>Catatan</th><th class="num">Aksi</th></tr></thead>
         <tbody>${txRows}</tbody>
       </table>
@@ -2146,6 +2175,7 @@ function openTxModal({ index = null, code = null } = {}) {  const existing = ind
   const selected = existing?.KODE || code || stocks[0]?.KODE || "";
   const today = new Date().toISOString().slice(0, 10);
   const held = DB.computePortfolio().positions.find((p) => p.code === selected);
+  const existingMeta = parseTxMeta(existing?.CATATAN);
 
   modalRoot().innerHTML = `
     <div class="modal-overlay">
@@ -2169,10 +2199,26 @@ function openTxModal({ index = null, code = null } = {}) {  const existing = ind
                 <option value="JUAL" ${existing?.JENIS === "JUAL" ? "selected" : ""}>JUAL</option>
               </select>
             </div>
+            <div class="field"><label for="tx-purpose">Tujuan pembelian *</label>
+              <select id="tx-purpose" name="tujuan" required>
+                ${TX_PURPOSES.map((p) => `<option value="${p}" ${existingMeta.tujuan === p ? "selected" : ""}>${p}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field span-2" id="tx-plan-fields" hidden>
+              <div class="form-grid">
+                <div class="field"><label for="tx-sell">Nilai sell (Rp/lembar)</label>
+                  <div class="prefix"><span>Rp</span><input id="tx-sell" name="nilaiSell" type="number" min="1" step="1" value="${existingMeta.nilaiSell ?? ""}" placeholder="mis. 2.450"></div>
+                </div>
+                <div class="field"><label for="tx-cut">Cut loss (Rp/lembar)</label>
+                  <div class="prefix"><span>Rp</span><input id="tx-cut" name="cutloss" type="number" min="1" step="1" value="${existingMeta.cutloss ?? ""}" placeholder="mis. 1.900"></div>
+                </div>
+              </div>
+              <p class="small muted" style="margin:6px 0 0">Wajib untuk tujuan SWING atau HARIAN.</p>
+            </div>
             <div class="field"><label for="tx-lot">Jumlah lot</label><input id="tx-lot" name="lot" type="number" min="1" step="1" required value="${existing?.LOT ?? ""}" placeholder="10"></div>
             <div class="field"><label for="tx-price">Harga per lembar</label><div class="prefix"><span>Rp</span><input id="tx-price" name="harga" type="number" min="1" step="1" required value="${existing?.HARGA ?? ""}" placeholder="2080"></div></div>
             <div class="field"><label for="tx-fee">Fee</label><div class="prefix"><span>Rp</span><input id="tx-fee" name="fee" type="number" min="0" step="1" value="${existing?.FEE ?? 0}"></div></div>
-            <div class="field span-2"><label for="tx-note">Catatan</label><input id="tx-note" name="catatan" maxlength="60" value="${esc(existing?.CATATAN || "")}" placeholder="mis. cicilan bulanan"></div>
+            <div class="field span-2"><label for="tx-note">Catatan</label><input id="tx-note" name="catatan" maxlength="45" value="${esc(existingMeta.note || "")}" placeholder="mis. cicilan bulanan"></div>
           </div>
           <div class="form-error" id="tx-error"></div>
           <div class="small muted mt-2" id="tx-held">Posisi saat ini: ${held ? `${num(held.lots, 0)} lot ${held.code}` : "belum ada"}.
@@ -2193,6 +2239,22 @@ function openTxModal({ index = null, code = null } = {}) {  const existing = ind
   overlay.addEventListener("mousedown", (ev) => { if (ev.target === overlay) closeModal(); });
 
   const form = document.getElementById("tx-form");
+  const planFields = document.getElementById("tx-plan-fields");
+  const sellInput = form.nilaiSell;
+  const cutInput = form.cutloss;
+  const syncPlan = () => {
+    const show = form.jenis.value === "BELI" && ["SWING", "HARIAN"].includes(form.tujuan.value);
+    planFields.hidden = !show;
+    sellInput.required = show;
+    cutInput.required = show;
+    if (!show) {
+      sellInput.value = "";
+      cutInput.value = "";
+    }
+  };
+  form.tujuan.addEventListener("change", syncPlan);
+  form.jenis.addEventListener("change", syncPlan);
+  syncPlan();
   const feeInput = form.fee;
   let feeTouched = Boolean(existing);
   feeInput.addEventListener("input", () => { feeTouched = true; });
@@ -2245,13 +2307,24 @@ function saveTransaction(form, existing) {
   const lot = Number(form.lot.value);
   const harga = Number(form.harga.value);
   const fee = Number(form.fee.value) || 0;
-  const catatan = form.catatan.value.trim();
+  const tujuan = form.tujuan.value;
+  const rawNote = form.catatan.value.trim();
+  let nilaiSell = null;
+  let cutloss = null;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal)) return show("Tanggal tidak valid.");
   if (!kode) return show("Pilih saham.");
+  if (!TX_PURPOSES.includes(tujuan)) return show("Pilih tujuan pembelian.");
   if (!(lot > 0) || !Number.isInteger(lot)) return show("Jumlah lot harus bilangan bulat positif.");
   if (!(harga > 0)) return show("Harga harus lebih besar dari nol.");
   if (fee < 0) return show("Fee tidak boleh negatif.");
+
+  if (jenis === "BELI" && ["SWING", "HARIAN"].includes(tujuan)) {
+    nilaiSell = Number(form.nilaiSell.value);
+    cutloss = Number(form.cutloss.value);
+    if (!(nilaiSell > 0)) return show("Nilai sell wajib diisi untuk tujuan SWING/HARIAN.");
+    if (!(cutloss > 0)) return show("Cut loss wajib diisi untuk tujuan SWING/HARIAN.");
+  }
 
   if (jenis === "JUAL") {
     const current = DB.computePortfolio().positions.find((p) => p.code === kode);
@@ -2261,6 +2334,8 @@ function saveTransaction(form, existing) {
     if (available <= 0) return show(`Belum ada posisi ${kode} untuk dijual.`);
     if (lot > available) return show(`Lot jual (${lot}) melebihi posisi tersedia (${available} lot).`);
   }
+
+  const catatan = buildTxNote(tujuan, nilaiSell, cutloss, rawNote);
 
   if (DB.apiMode) {
     const payload = { tanggal, kode, jenis, lot, harga, fee, catatan };
