@@ -55,16 +55,16 @@ const icon = (name) => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"
 /* ------------------------------------------------------------------ util UI */
 const RATING_TONE = { Menarik: "pos", Netral: "warn", "Kurang menarik": "neg" };
 const MODEL_LABEL = { bank: "Bank", cyclical: "Siklikal", utility: "Utilitas", insurer: "Asuransi", infra: "Infrastruktur" };
-const TX_PURPOSES = ["HOLD", "INVESTASI", "SWING", "HARIAN"];
-const TX_PURPOSE_TONE = { HOLD: "plain", INVESTASI: "pos", SWING: "warn", HARIAN: "neg" };
+const TX_PURPOSES = ["INVESTASI", "SWING", "HARIAN"];
+const TX_PURPOSE_TONE = { INVESTASI: "pos", SWING: "warn", HARIAN: "neg" };
 
 /** Metadata rencana transaksi disimpan kompatibel di kolom CATATAN (maks 60). */
 function parseTxMeta(value) {
   const raw = String(value || "");
   const m = raw.match(/^\[\[(HOLD|INVESTASI|SWING|HARIAN):(\d*):(\d*)\]\]\s?/);
-  if (!m) return { tujuan: "HOLD", nilaiSell: null, cutloss: null, note: raw };
+  if (!m) return { tujuan: "INVESTASI", nilaiSell: null, cutloss: null, note: raw };
   return {
-    tujuan: m[1],
+    tujuan: m[1] === "HOLD" ? "INVESTASI" : m[1],
     nilaiSell: Number(m[2]) > 0 ? Number(m[2]) : null,
     cutloss: Number(m[3]) > 0 ? Number(m[3]) : null,
     note: raw.slice(m[0].length),
@@ -72,7 +72,7 @@ function parseTxMeta(value) {
 }
 
 function buildTxNote(tujuan, nilaiSell, cutloss, note) {
-  const purpose = TX_PURPOSES.includes(tujuan) ? tujuan : "HOLD";
+  const purpose = TX_PURPOSES.includes(tujuan) ? tujuan : "INVESTASI";
   const sell = Number(nilaiSell) > 0 ? Math.round(Number(nilaiSell)) : 0;
   const cut = Number(cutloss) > 0 ? Math.round(Number(cutloss)) : 0;
   const prefix = `[[${purpose}:${sell}:${cut}]]`;
