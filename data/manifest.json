@@ -16,7 +16,7 @@
    "records": 9,
    "fields": 39,
    "bytes": 7591,
-   "sha1": "806fa0e82cb9"
+   "sha1": "85cb953fb34e"
   },
   {
    "name": "VALUASI",
@@ -26,7 +26,7 @@
    "records": 9,
    "fields": 23,
    "bytes": 2930,
-   "sha1": "2c4fe1500ab4"
+   "sha1": "87a9297c61be"
   },
   {
    "name": "TEKNIKAL",
@@ -96,9 +96,9 @@
    "records": 11,
    "fields": 2,
    "bytes": 1165,
-   "sha1": "881da77e9144"
+   "sha1": "a8f77f75ac07"
   }
  ],
- "priceUpdated": "2026-11-19T01:52:31+07:00",
+ "priceUpdated": "2026-11-20T01:59:41+07:00",
  "priceSource": "Yahoo Finance (delayed)"
 }
